@@ -1,0 +1,28 @@
+[package]
+name = "morph"
+version = "0.0.1"
+edition = "2024"
+
+[profile.release]
+codegen-units = 1
+lto = "thin"
+
+[dependencies.bevy]
+version = "0.16.*"
+default-features = false
+features = [
+    "x11",
+    "std",
+    "png",
+    "bevy_log",
+    "bevy_asset",
+    "bevy_text",
+    "bevy_image",
+    "bevy_state",
+    "bevy_window",
+    "bevy_render",
+    "default_font",
+    "async_executor",
+    "multi_threaded",
+    "bevy_core_pipeline",
+]
