@@ -4,8 +4,8 @@
 // This was generated using spacetimedb cli version 1.3.0 (commit ).
 
 #![allow(unused, clippy::all)]
-use super::block_model_type::BlockModel;
 use super::block_type::Block;
+use super::block_type_type::BlockType;
 use spacetimedb_sdk::__codegen::{self as __sdk, __lib, __sats, __ws};
 
 /// Table handle for the table `block`.
@@ -84,7 +84,7 @@ impl<'ctx> __sdk::Table for BlockTableHandle<'ctx> {
 #[doc(hidden)]
 pub(super) fn register_table(client_cache: &mut __sdk::ClientCache<super::RemoteModule>) {
     let _table = client_cache.get_or_make_table::<Block>("block");
-    _table.add_unique_constraint::<u64>("id", |row| &row.id);
+    _table.add_unique_constraint::<u16>("id", |row| &row.id);
 }
 pub struct BlockUpdateCallbackId(__sdk::CallbackId);
 
@@ -122,7 +122,7 @@ pub(super) fn parse_table_update(
 /// but to directly chain method calls,
 /// like `ctx.db.block().id().find(...)`.
 pub struct BlockIdUnique<'ctx> {
-    imp: __sdk::UniqueConstraintHandle<Block, u64>,
+    imp: __sdk::UniqueConstraintHandle<Block, u16>,
     phantom: std::marker::PhantomData<&'ctx super::RemoteTables>,
 }
 
@@ -130,7 +130,7 @@ impl<'ctx> BlockTableHandle<'ctx> {
     /// Get a handle on the `id` unique index on the table `block`.
     pub fn id(&self) -> BlockIdUnique<'ctx> {
         BlockIdUnique {
-            imp: self.imp.get_unique_constraint::<u64>("id"),
+            imp: self.imp.get_unique_constraint::<u16>("id"),
             phantom: std::marker::PhantomData,
         }
     }
@@ -139,7 +139,7 @@ impl<'ctx> BlockTableHandle<'ctx> {
 impl<'ctx> BlockIdUnique<'ctx> {
     /// Find the subscribed row whose `id` column value is equal to `col_val`,
     /// if such a row is present in the client cache.
-    pub fn find(&self, col_val: &u64) -> Option<Block> {
+    pub fn find(&self, col_val: &u16) -> Option<Block> {
         self.imp.find(col_val)
     }
 }

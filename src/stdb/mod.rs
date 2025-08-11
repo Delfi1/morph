@@ -6,9 +6,9 @@
 #![allow(unused, clippy::all)]
 use spacetimedb_sdk::__codegen::{self as __sdk, __lib, __sats, __ws};
 
-pub mod block_model_type;
 pub mod block_table;
 pub mod block_type;
+pub mod block_type_type;
 pub mod chunk_table;
 pub mod chunk_type;
 pub mod create_player_reducer;
@@ -19,13 +19,17 @@ pub mod identity_disconnected_reducer;
 pub mod join_reducer;
 pub mod mesh_table;
 pub mod mesh_type;
+pub mod model_type_type;
 pub mod player_table;
 pub mod player_type;
+pub mod scanner_table;
+pub mod scanner_type;
 pub mod st_i_vec_3_type;
+pub mod st_vec_3_type;
 
-pub use block_model_type::BlockModel;
 pub use block_table::*;
 pub use block_type::Block;
+pub use block_type_type::BlockType;
 pub use chunk_table::*;
 pub use chunk_type::Chunk;
 pub use create_player_reducer::{
@@ -42,9 +46,13 @@ pub use identity_disconnected_reducer::{
 pub use join_reducer::{join, set_flags_for_join, JoinCallbackId};
 pub use mesh_table::*;
 pub use mesh_type::Mesh;
+pub use model_type_type::ModelType;
 pub use player_table::*;
 pub use player_type::Player;
+pub use scanner_table::*;
+pub use scanner_type::Scanner;
 pub use st_i_vec_3_type::StIVec3;
+pub use st_vec_3_type::StVec3;
 
 #[derive(Clone, PartialEq, Debug)]
 
@@ -112,6 +120,7 @@ pub struct DbUpdate {
     file: __sdk::TableUpdate<File>,
     mesh: __sdk::TableUpdate<Mesh>,
     player: __sdk::TableUpdate<Player>,
+    scanner: __sdk::TableUpdate<Scanner>,
 }
 
 impl TryFrom<__ws::DatabaseUpdate<__ws::BsatnFormat>> for DbUpdate {
@@ -135,6 +144,9 @@ impl TryFrom<__ws::DatabaseUpdate<__ws::BsatnFormat>> for DbUpdate {
                 "player" => db_update
                     .player
                     .append(player_table::parse_table_update(table_update)?),
+                "scanner" => db_update
+                    .scanner
+                    .append(scanner_table::parse_table_update(table_update)?),
 
                 unknown => {
                     return Err(__sdk::InternalError::unknown_name(
@@ -172,6 +184,9 @@ impl __sdk::DbUpdate for DbUpdate {
         diff.player = cache
             .apply_diff_to_table::<Player>("player", &self.player)
             .with_updates_by_pk(|row| &row.id);
+        diff.scanner = cache
+            .apply_diff_to_table::<Scanner>("scanner", &self.scanner)
+            .with_updates_by_pk(|row| &row.identity);
 
         diff
     }
@@ -186,6 +201,7 @@ pub struct AppliedDiff<'r> {
     file: __sdk::TableAppliedDiff<'r, File>,
     mesh: __sdk::TableAppliedDiff<'r, Mesh>,
     player: __sdk::TableAppliedDiff<'r, Player>,
+    scanner: __sdk::TableAppliedDiff<'r, Scanner>,
 }
 
 impl __sdk::InModule for AppliedDiff<'_> {
@@ -203,6 +219,7 @@ impl<'r> __sdk::AppliedDiff<'r> for AppliedDiff<'r> {
         callbacks.invoke_table_row_callbacks::<File>("file", &self.file, event);
         callbacks.invoke_table_row_callbacks::<Mesh>("mesh", &self.mesh, event);
         callbacks.invoke_table_row_callbacks::<Player>("player", &self.player, event);
+        callbacks.invoke_table_row_callbacks::<Scanner>("scanner", &self.scanner, event);
     }
 }
 
@@ -783,5 +800,6 @@ impl __sdk::SpacetimeModule for RemoteModule {
         file_table::register_table(client_cache);
         mesh_table::register_table(client_cache);
         player_table::register_table(client_cache);
+        scanner_table::register_table(client_cache);
     }
 }

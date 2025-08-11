@@ -6,18 +6,15 @@
 #![allow(unused, clippy::all)]
 use spacetimedb_sdk::__codegen::{self as __sdk, __lib, __sats, __ws};
 
+use super::st_i_vec_3_type::StIVec3;
+
 #[derive(__lib::ser::Serialize, __lib::de::Deserialize, Clone, PartialEq, Debug)]
 #[sats(crate = __lib)]
-pub enum BlockModel {
-    Cube(u64),
-
-    Stair(u64),
-
-    Slab(u64),
-
-    Custom(u64),
+pub struct Scanner {
+    pub identity: __sdk::Identity,
+    pub chunk: StIVec3,
 }
 
-impl __sdk::InModule for BlockModel {
+impl __sdk::InModule for Scanner {
     type Module = super::RemoteModule;
 }

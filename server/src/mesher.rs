@@ -1,9 +1,14 @@
-use super::chunks::Chunk;
-use spacetimedb::table;
+use super::{
+    math::*,
+    chunks::Chunk
+};
+use spacetimedb::{table};
 
 #[table(name = mesh, public)]
 /// Mesh table (or cached mesh)
 pub struct Mesh {
+    #[unique]
+    position: StIVec3,
     vertices: Vec<u32>,
     indices: Vec<u32>,
 }

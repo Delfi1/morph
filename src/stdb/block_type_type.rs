@@ -6,15 +6,15 @@
 #![allow(unused, clippy::all)]
 use spacetimedb_sdk::__codegen::{self as __sdk, __lib, __sats, __ws};
 
-use super::block_type_type::BlockType;
+use super::model_type_type::ModelType;
 
 #[derive(__lib::ser::Serialize, __lib::de::Deserialize, Clone, PartialEq, Debug)]
 #[sats(crate = __lib)]
-pub struct Block {
-    pub id: u16,
-    pub block_type: BlockType,
+pub struct BlockType {
+    pub name: String,
+    pub model: ModelType,
 }
 
-impl __sdk::InModule for Block {
+impl __sdk::InModule for BlockType {
     type Module = super::RemoteModule;
 }

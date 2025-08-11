@@ -6,9 +6,12 @@
 #![allow(unused, clippy::all)]
 use spacetimedb_sdk::__codegen::{self as __sdk, __lib, __sats, __ws};
 
+use super::st_i_vec_3_type::StIVec3;
+
 #[derive(__lib::ser::Serialize, __lib::de::Deserialize, Clone, PartialEq, Debug)]
 #[sats(crate = __lib)]
 pub struct Mesh {
+    pub position: StIVec3,
     pub vertices: Vec<u32>,
     pub indices: Vec<u32>,
 }

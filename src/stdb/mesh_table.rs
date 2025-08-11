@@ -5,6 +5,7 @@
 
 #![allow(unused, clippy::all)]
 use super::mesh_type::Mesh;
+use super::st_i_vec_3_type::StIVec3;
 use spacetimedb_sdk::__codegen::{self as __sdk, __lib, __sats, __ws};
 
 /// Table handle for the table `mesh`.

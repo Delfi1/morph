@@ -12,7 +12,7 @@ use super::st_i_vec_3_type::StIVec3;
 #[sats(crate = __lib)]
 pub struct Chunk {
     pub position: StIVec3,
-    pub blocks: Vec<u64>,
+    pub blocks: Vec<u16>,
 }
 
 impl __sdk::InModule for Chunk {

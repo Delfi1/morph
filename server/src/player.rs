@@ -1,3 +1,4 @@
+use super::math::*;
 use spacetimedb::{
     reducer, table, Table,
     Identity, ReducerContext,
@@ -22,7 +23,17 @@ pub struct Player {
     name: String,
     #[unique]
     identity: Identity,
+    position: StVec3,
     online: bool
+}
+
+#[table(name = scanner)]
+// todo: destroy if player is offline
+pub struct Scanner {
+    #[primary_key]
+    // linked with player identity
+    identity: Identity,
+    chunk: StIVec3
 }
 
 #[reducer]
@@ -35,6 +46,7 @@ pub fn create_player(ctx: &ReducerContext, name: String) -> Result<(), String> {
         id: 0,
         name,
         identity: ctx.sender,
+        position: vec3(0.0, 40.0, 0.0).into(),
         online: false
     });
 

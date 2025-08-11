@@ -1,6 +1,6 @@
 // todo: chunks, blocks metadata, client-side rendering,
 // server-side mesher, and meshes cache
-use log::info;
+use log::debug;
 use spacetimedb::{
     reducer, ReducerContext, Table
 };
@@ -11,14 +11,17 @@ mod assets;
 mod chunks;
 mod mesher;
 
-use assets::*;
+use assets::file;
 
 #[reducer(init)]
 pub fn init(ctx: &ReducerContext) -> Result<(), String> {
     // generate server assets
     assets::load_assets(&ctx);
 
-    info!("Total assets: {}", ctx.db.file().count());
+    debug!("Total assets: {}", ctx.db.file().count());
+
+    // create blocks data
+    chunks::init_blocks(&ctx);
 
     Ok(())
 }

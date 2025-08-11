@@ -1,4 +1,4 @@
-use log::info;
+use log::debug;
 use spacetimedb::{table, ReducerContext, Table};
 use include_directory::{include_directory, Dir};
 
@@ -19,7 +19,7 @@ pub struct File {
 // todo: create recursive read (load) assets function
 
 pub fn load_assets(ctx: &ReducerContext) {
-    info!("Loading assets...");
+    debug!("Loading assets...");
 
     for file in ASSETS_DIR.files() {
         let path = file.path();
