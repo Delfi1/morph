@@ -6,14 +6,13 @@
 #![allow(unused, clippy::all)]
 use spacetimedb_sdk::__codegen::{self as __sdk, __lib, __sats, __ws};
 
+pub mod asset_table;
 pub mod block_table;
 pub mod block_type;
 pub mod block_type_type;
 pub mod chunk_table;
 pub mod chunk_type;
 pub mod create_player_reducer;
-pub mod file_table;
-pub mod file_type;
 pub mod identity_connected_reducer;
 pub mod identity_disconnected_reducer;
 pub mod join_reducer;
@@ -24,9 +23,11 @@ pub mod player_table;
 pub mod player_type;
 pub mod scanner_table;
 pub mod scanner_type;
+pub mod st_asset_type;
 pub mod st_i_vec_3_type;
 pub mod st_vec_3_type;
 
+pub use asset_table::*;
 pub use block_table::*;
 pub use block_type::Block;
 pub use block_type_type::BlockType;
@@ -35,8 +36,6 @@ pub use chunk_type::Chunk;
 pub use create_player_reducer::{
     create_player, set_flags_for_create_player, CreatePlayerCallbackId,
 };
-pub use file_table::*;
-pub use file_type::File;
 pub use identity_connected_reducer::{
     identity_connected, set_flags_for_identity_connected, IdentityConnectedCallbackId,
 };
@@ -51,6 +50,7 @@ pub use player_table::*;
 pub use player_type::Player;
 pub use scanner_table::*;
 pub use scanner_type::Scanner;
+pub use st_asset_type::StAsset;
 pub use st_i_vec_3_type::StIVec3;
 pub use st_vec_3_type::StVec3;
 
@@ -115,9 +115,9 @@ impl TryFrom<__ws::ReducerCallInfo<__ws::BsatnFormat>> for Reducer {
 #[allow(non_snake_case)]
 #[doc(hidden)]
 pub struct DbUpdate {
+    asset: __sdk::TableUpdate<StAsset>,
     block: __sdk::TableUpdate<Block>,
     chunk: __sdk::TableUpdate<Chunk>,
-    file: __sdk::TableUpdate<File>,
     mesh: __sdk::TableUpdate<Mesh>,
     player: __sdk::TableUpdate<Player>,
     scanner: __sdk::TableUpdate<Scanner>,
@@ -129,15 +129,15 @@ impl TryFrom<__ws::DatabaseUpdate<__ws::BsatnFormat>> for DbUpdate {
         let mut db_update = DbUpdate::default();
         for table_update in raw.tables {
             match &table_update.table_name[..] {
+                "asset" => db_update
+                    .asset
+                    .append(asset_table::parse_table_update(table_update)?),
                 "block" => db_update
                     .block
                     .append(block_table::parse_table_update(table_update)?),
                 "chunk" => db_update
                     .chunk
                     .append(chunk_table::parse_table_update(table_update)?),
-                "file" => db_update
-                    .file
-                    .append(file_table::parse_table_update(table_update)?),
                 "mesh" => db_update
                     .mesh
                     .append(mesh_table::parse_table_update(table_update)?),
@@ -173,13 +173,13 @@ impl __sdk::DbUpdate for DbUpdate {
     ) -> AppliedDiff<'_> {
         let mut diff = AppliedDiff::default();
 
+        diff.asset = cache
+            .apply_diff_to_table::<StAsset>("asset", &self.asset)
+            .with_updates_by_pk(|row| &row.id);
         diff.block = cache
             .apply_diff_to_table::<Block>("block", &self.block)
             .with_updates_by_pk(|row| &row.id);
         diff.chunk = cache.apply_diff_to_table::<Chunk>("chunk", &self.chunk);
-        diff.file = cache
-            .apply_diff_to_table::<File>("file", &self.file)
-            .with_updates_by_pk(|row| &row.id);
         diff.mesh = cache.apply_diff_to_table::<Mesh>("mesh", &self.mesh);
         diff.player = cache
             .apply_diff_to_table::<Player>("player", &self.player)
@@ -196,9 +196,9 @@ impl __sdk::DbUpdate for DbUpdate {
 #[allow(non_snake_case)]
 #[doc(hidden)]
 pub struct AppliedDiff<'r> {
+    asset: __sdk::TableAppliedDiff<'r, StAsset>,
     block: __sdk::TableAppliedDiff<'r, Block>,
     chunk: __sdk::TableAppliedDiff<'r, Chunk>,
-    file: __sdk::TableAppliedDiff<'r, File>,
     mesh: __sdk::TableAppliedDiff<'r, Mesh>,
     player: __sdk::TableAppliedDiff<'r, Player>,
     scanner: __sdk::TableAppliedDiff<'r, Scanner>,
@@ -214,9 +214,9 @@ impl<'r> __sdk::AppliedDiff<'r> for AppliedDiff<'r> {
         event: &EventContext,
         callbacks: &mut __sdk::DbCallbacks<RemoteModule>,
     ) {
+        callbacks.invoke_table_row_callbacks::<StAsset>("asset", &self.asset, event);
         callbacks.invoke_table_row_callbacks::<Block>("block", &self.block, event);
         callbacks.invoke_table_row_callbacks::<Chunk>("chunk", &self.chunk, event);
-        callbacks.invoke_table_row_callbacks::<File>("file", &self.file, event);
         callbacks.invoke_table_row_callbacks::<Mesh>("mesh", &self.mesh, event);
         callbacks.invoke_table_row_callbacks::<Player>("player", &self.player, event);
         callbacks.invoke_table_row_callbacks::<Scanner>("scanner", &self.scanner, event);
@@ -795,9 +795,9 @@ impl __sdk::SpacetimeModule for RemoteModule {
     type SubscriptionHandle = SubscriptionHandle;
 
     fn register_tables(client_cache: &mut __sdk::ClientCache<Self>) {
+        asset_table::register_table(client_cache);
         block_table::register_table(client_cache);
         chunk_table::register_table(client_cache);
-        file_table::register_table(client_cache);
         mesh_table::register_table(client_cache);
         player_table::register_table(client_cache);
         scanner_table::register_table(client_cache);

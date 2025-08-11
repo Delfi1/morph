@@ -1,6 +1,6 @@
 [package]
 name = "spacetime-module"
-version = "0.1.0"
+version = "0.0.1"
 edition = "2024"
 
 [lib]
@@ -9,5 +9,6 @@ crate-type = ["cdylib"]
 [dependencies]
 spacetimedb = { version = "1.3.0", features = ["unstable"] }
 include_directory = "*"
+bincode = "2.0"
 bevy_math = "*"
 log = "0.4"

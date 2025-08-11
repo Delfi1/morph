@@ -10,17 +10,17 @@ use bevy::{
 use bevy_spacetimedb::*;
 
 mod stdb;
-use spacetimedb_sdk::Table;
+use spacetimedb_sdk::{Table, TableWithPrimaryKey};
 use stdb::*;
 
 pub type SpacetimeDB<'a> = Res<'a, StdbConnection<DbConnection>>;
 
 #[derive(Resource, Clone, Default)]
-pub struct FilesQueue(Arc<RwLock<HashSet<u64>>>);
+pub struct AssetsQueue(Arc<RwLock<HashSet<u64>>>);
 
 fn main() {
     App::new()
-        .init_resource::<FilesQueue>()
+        .init_resource::<AssetsQueue>()
         .add_plugins(
             StdbPlugin::default()
                 .with_uri("http://localhost:3000")
@@ -29,21 +29,32 @@ fn main() {
             )
         .add_plugins(DefaultPlugins)
         .add_systems(PreStartup, setup)
-        .add_systems(FixedPostUpdate, queue_files)
+        .add_systems(FixedPostUpdate, queue_assets)
         .run();
 }
 
 fn setup(
     mut commands: Commands,
-    files_queue: Res<FilesQueue>,
+    assets_queue: Res<AssetsQueue>,
     handler: SpacetimeDB,
 ) {
+    let assets = assets_queue.into_inner();
     commands.spawn(Camera3d::default());
 
-    let file_queue = files_queue.into_inner().clone();
-    handler.db().file().on_insert(move |_, file| {
-        let mut access = file_queue.0.write().unwrap();
-        access.insert(file.id);
+    handler.db().chunk().on_insert(move |_, chunk| {
+        println!("Inserted Chunk({:?}) = {} bytes", chunk.position, chunk.data.len());
+    });
+
+    let files = assets.clone();
+    handler.db().asset().on_insert(move |_, asset| {
+        let mut access = files.0.write().unwrap();
+        access.insert(asset.id);
+    });
+
+    let files = assets.clone();
+    handler.db().asset().on_update(move |_, _, asset| {
+        let mut access = files.0.write().unwrap();
+        access.insert(asset.id);
     });
 
     handler.subscription_builder()
@@ -55,25 +66,25 @@ fn setup(
         })
         .subscribe([
             "SELECT * FROM player",
+            "SELECT * FROM asset",
             "SELECT * FROM chunk",
             "SELECT * FROM mesh",
-            "SELECT * FROM file",
         ]);
 }
 
-fn queue_files(
-    files_queue: Res<FilesQueue>,
+fn queue_assets(
+    assets_queue: Res<AssetsQueue>,
     handler: SpacetimeDB,
     assets: Res<EmbeddedAssetRegistry>,
 ) {
-    let mut access = files_queue.0.write().unwrap();
+    let mut access = assets_queue.0.write().unwrap();
     for id in access.drain() {
-        let file = handler.db().file().id().find(&id).unwrap();
-        println!("Queue file: {}", file.name);
+        let asset = handler.db().asset().id().find(&id).unwrap();
+        println!("Queued asset: {}", asset.name);
 
         let full = PathBuf::from("");
-        let relative = PathBuf::from(file.name);
+        let relative = PathBuf::from(asset.name);
 
-        assets.insert_asset(full, &relative, file.value);
+        assets.insert_asset(full, &relative, asset.value);
     }
 }

@@ -5,23 +5,27 @@ use spacetimedb::{
     reducer, ReducerContext, Table
 };
 
+pub use bincode;
 pub mod math;
 mod player;
 mod assets;
 mod chunks;
 mod mesher;
 
-use assets::file;
+use assets::asset;
 
 #[reducer(init)]
 pub fn init(ctx: &ReducerContext) -> Result<(), String> {
     // generate server assets
     assets::load_assets(&ctx);
 
-    debug!("Total assets: {}", ctx.db.file().count());
+    debug!("Total assets: {}", ctx.db.asset().count());
 
     // create blocks data
     chunks::init_blocks(&ctx);
+
+    // generate world in range
+    chunks::generate(&ctx, 8);
 
     Ok(())
 }
