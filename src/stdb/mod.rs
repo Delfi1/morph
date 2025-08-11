@@ -9,7 +9,6 @@ use spacetimedb_sdk::__codegen::{self as __sdk, __lib, __sats, __ws};
 pub mod asset_table;
 pub mod block_table;
 pub mod block_type;
-pub mod block_type_type;
 pub mod chunk_table;
 pub mod chunk_type;
 pub mod create_player_reducer;
@@ -30,7 +29,6 @@ pub mod st_vec_3_type;
 pub use asset_table::*;
 pub use block_table::*;
 pub use block_type::Block;
-pub use block_type_type::BlockType;
 pub use chunk_table::*;
 pub use chunk_type::Chunk;
 pub use create_player_reducer::{

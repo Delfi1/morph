@@ -1,6 +1,7 @@
 use spacetimedb::{table, SpacetimeType};
 
 #[derive(SpacetimeType)]
+#[derive(serde::Serialize, serde::Deserialize)]
 // Model type with texture file name
 pub enum ModelType {
     Cube(String),
@@ -10,27 +11,16 @@ pub enum ModelType {
     Empty
 }
 
-#[derive(SpacetimeType)]
-pub struct BlockType {
-    // block type name
-    pub name: String,
-    // Texture path
-    pub model: ModelType,
-    // light?
-    // collision?
-}
-
-impl BlockType {
-    pub fn new(name: String, model: ModelType) -> Self {
-        Self { name, model }
-    }
-}
-
 // Block type table
 #[table(name = block)]
 pub struct Block {
     #[primary_key]
     pub id: u16,
+    // block name
     #[unique]
-    pub block_type: BlockType
+    pub name: String,
+    // Texture path and model
+    pub model: ModelType,
+    // light?
+    // collision? todo
 }

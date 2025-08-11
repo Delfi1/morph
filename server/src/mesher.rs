@@ -4,6 +4,8 @@ use super::{
 };
 use spacetimedb::{table};
 
+// todo: mesh lods
+
 #[table(name = mesh, public)]
 /// Mesh table (or cached mesh)
 pub struct Mesh {

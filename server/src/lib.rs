@@ -1,5 +1,6 @@
 // todo: chunks, blocks metadata, client-side rendering,
 // server-side mesher, and meshes cache
+
 use log::debug;
 use spacetimedb::{
     reducer, ReducerContext, Table
@@ -25,7 +26,7 @@ pub fn init(ctx: &ReducerContext) -> Result<(), String> {
     chunks::init_blocks(&ctx);
 
     // generate world in range
-    chunks::generate(&ctx, 8);
+    chunks::generate(&ctx, 4);
 
     Ok(())
 }

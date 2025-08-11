@@ -5,7 +5,7 @@
 
 #![allow(unused, clippy::all)]
 use super::block_type::Block;
-use super::block_type_type::BlockType;
+use super::model_type_type::ModelType;
 use spacetimedb_sdk::__codegen::{self as __sdk, __lib, __sats, __ws};
 
 /// Table handle for the table `block`.
@@ -85,6 +85,7 @@ impl<'ctx> __sdk::Table for BlockTableHandle<'ctx> {
 pub(super) fn register_table(client_cache: &mut __sdk::ClientCache<super::RemoteModule>) {
     let _table = client_cache.get_or_make_table::<Block>("block");
     _table.add_unique_constraint::<u16>("id", |row| &row.id);
+    _table.add_unique_constraint::<String>("name", |row| &row.name);
 }
 pub struct BlockUpdateCallbackId(__sdk::CallbackId);
 
@@ -140,6 +141,36 @@ impl<'ctx> BlockIdUnique<'ctx> {
     /// Find the subscribed row whose `id` column value is equal to `col_val`,
     /// if such a row is present in the client cache.
     pub fn find(&self, col_val: &u16) -> Option<Block> {
+        self.imp.find(col_val)
+    }
+}
+
+/// Access to the `name` unique index on the table `block`,
+/// which allows point queries on the field of the same name
+/// via the [`BlockNameUnique::find`] method.
+///
+/// Users are encouraged not to explicitly reference this type,
+/// but to directly chain method calls,
+/// like `ctx.db.block().name().find(...)`.
+pub struct BlockNameUnique<'ctx> {
+    imp: __sdk::UniqueConstraintHandle<Block, String>,
+    phantom: std::marker::PhantomData<&'ctx super::RemoteTables>,
+}
+
+impl<'ctx> BlockTableHandle<'ctx> {
+    /// Get a handle on the `name` unique index on the table `block`.
+    pub fn name(&self) -> BlockNameUnique<'ctx> {
+        BlockNameUnique {
+            imp: self.imp.get_unique_constraint::<String>("name"),
+            phantom: std::marker::PhantomData,
+        }
+    }
+}
+
+impl<'ctx> BlockNameUnique<'ctx> {
+    /// Find the subscribed row whose `name` column value is equal to `col_val`,
+    /// if such a row is present in the client cache.
+    pub fn find(&self, col_val: &String) -> Option<Block> {
         self.imp.find(col_val)
     }
 }
