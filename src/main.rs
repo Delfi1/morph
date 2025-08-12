@@ -42,7 +42,7 @@ fn setup(
     commands.spawn(Camera3d::default());
 
     handler.db().chunk().on_insert(move |_, chunk| {
-        println!("Inserted Chunk({:?}) = {} bytes", chunk.position, chunk.data.len());
+        println!("Inserted Chunk({:?}) = {} bytes", chunk.position, chunk.blocks.len()*2);
     });
 
     let files = assets.clone();

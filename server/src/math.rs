@@ -1,7 +1,7 @@
 pub use bevy_math::*;
 use spacetimedb::SpacetimeType;
 
-#[derive(SpacetimeType, Clone, Copy, Debug, PartialEq)]
+#[derive(SpacetimeType, Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct StIVec3 {
     pub x: i32,
     pub y: i32,

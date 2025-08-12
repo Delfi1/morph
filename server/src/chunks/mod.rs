@@ -1,12 +1,15 @@
 use crate::chunks::generate::generate_chunk;
 
+// FIXME: optimize chunks size
+
 // todo: player access chunks - 3*3*3 chunks area
 // player access meshes - 16*16*16 chunks area
 // player position -> scanner chunk position 
 
 use super::math::*;
 use spacetimedb::{
-    table, ReducerContext, Table,
+    reducer, table, ReducerContext,
+    ScheduleAt, Table, TimeDuration
     //client_visibility_filter, Filter
 };
 use std::collections::*;
@@ -26,9 +29,9 @@ pub const SIZE_P3: usize = SIZE.pow(3);
 #[table(name = chunk, public)]
 pub struct Chunk {
     #[unique]
-    position: StIVec3,
-    // Data of blocks Vec<u16> -> bincode
-    data: Vec<u8>
+    pub position: StIVec3,
+    // Vec of blocks
+    pub blocks: Vec<u16>
 }
 
 impl Chunk {
@@ -37,11 +40,7 @@ impl Chunk {
     }
 
     pub fn new(position: StIVec3, blocks: Vec<u16>) -> Self {
-        let data = bincode::encode_to_vec(
-            blocks, bincode::config::standard()
-        ).unwrap();
-
-        Self { position, data }
+        Self { position, blocks }
     }
 }
 
@@ -64,6 +63,28 @@ pub fn init_blocks(ctx: &ReducerContext) {
     }
 }
 
+#[table(name = chunk_schedule, scheduled(run_generator))]
+pub struct ChunkSchedule {
+    #[primary_key]
+    #[auto_inc]
+    pub scheduled_id: u64,
+    pub scheduled_at: ScheduleAt,
+    
+    #[unique]
+    pub position: StIVec3
+}
+
+#[reducer]
+fn run_generator(ctx: &ReducerContext, arg: ChunkSchedule) -> Result<(), String> {
+    if ctx.sender != ctx.identity() {
+        return Err("Generator may not be invoked by clients, only via scheduling.".into());
+    }
+
+    generate_chunk(ctx, arg.position.into());
+
+    Ok(())
+}
+
 /// Generate world area
 pub fn generate(ctx: &ReducerContext, range: usize) {
     let mut area = HashSet::with_capacity(range.pow(3));
@@ -77,7 +98,13 @@ pub fn generate(ctx: &ReducerContext, range: usize) {
         }
     }
 
+    let delay = TimeDuration::from_micros(15_000);
+    let scheduled_at = (ctx.timestamp + delay).into();
     for pos in area {
-        generate_chunk(ctx, pos);
+        ctx.db.chunk_schedule().insert(ChunkSchedule {
+            scheduled_id: 0,
+            scheduled_at,
+            position: pos.into()
+        });
     }
 }

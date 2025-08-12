@@ -6,7 +6,6 @@ use spacetimedb::{
     reducer, ReducerContext, Table
 };
 
-pub use bincode;
 pub mod math;
 mod player;
 mod assets;

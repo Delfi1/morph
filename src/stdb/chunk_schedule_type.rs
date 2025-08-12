@@ -10,11 +10,12 @@ use super::st_i_vec_3_type::StIVec3;
 
 #[derive(__lib::ser::Serialize, __lib::de::Deserialize, Clone, PartialEq, Debug)]
 #[sats(crate = __lib)]
-pub struct Chunk {
+pub struct ChunkSchedule {
+    pub scheduled_id: u64,
+    pub scheduled_at: __sdk::ScheduleAt,
     pub position: StIVec3,
-    pub blocks: Vec<u16>,
 }
 
-impl __sdk::InModule for Chunk {
+impl __sdk::InModule for ChunkSchedule {
     type Module = super::RemoteModule;
 }

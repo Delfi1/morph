@@ -2,9 +2,10 @@
 
 use super::*;
 
-// todo world gen context
+/// World gen context
+/// todo: load data from config
 pub struct _Generator {
-
+    
 }
 
 pub fn block_by_name(ctx: &ReducerContext, name: impl Into<String>) -> u16 {
