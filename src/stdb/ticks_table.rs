@@ -4,7 +4,7 @@
 // This was generated using spacetimedb cli version 1.3.0 (commit ).
 
 #![allow(unused, clippy::all)]
-use super::tick_schedule_type::TickSchedule;
+use super::ticks_type::Ticks;
 use spacetimedb_sdk::__codegen::{self as __sdk, __lib, __sats, __ws};
 
 /// Table handle for the table `ticks`.
@@ -16,7 +16,7 @@ use spacetimedb_sdk::__codegen::{self as __sdk, __lib, __sats, __ws};
 /// but to directly chain method calls,
 /// like `ctx.db.ticks().on_insert(...)`.
 pub struct TicksTableHandle<'ctx> {
-    imp: __sdk::TableHandle<TickSchedule>,
+    imp: __sdk::TableHandle<Ticks>,
     ctx: std::marker::PhantomData<&'ctx super::RemoteTables>,
 }
 
@@ -33,7 +33,7 @@ pub trait TicksTableAccess {
 impl TicksTableAccess for super::RemoteTables {
     fn ticks(&self) -> TicksTableHandle<'_> {
         TicksTableHandle {
-            imp: self.imp.get_table::<TickSchedule>("ticks"),
+            imp: self.imp.get_table::<Ticks>("ticks"),
             ctx: std::marker::PhantomData,
         }
     }
@@ -43,13 +43,13 @@ pub struct TicksInsertCallbackId(__sdk::CallbackId);
 pub struct TicksDeleteCallbackId(__sdk::CallbackId);
 
 impl<'ctx> __sdk::Table for TicksTableHandle<'ctx> {
-    type Row = TickSchedule;
+    type Row = Ticks;
     type EventContext = super::EventContext;
 
     fn count(&self) -> u64 {
         self.imp.count()
     }
-    fn iter(&self) -> impl Iterator<Item = TickSchedule> + '_ {
+    fn iter(&self) -> impl Iterator<Item = Ticks> + '_ {
         self.imp.iter()
     }
 
@@ -82,7 +82,7 @@ impl<'ctx> __sdk::Table for TicksTableHandle<'ctx> {
 
 #[doc(hidden)]
 pub(super) fn register_table(client_cache: &mut __sdk::ClientCache<super::RemoteModule>) {
-    let _table = client_cache.get_or_make_table::<TickSchedule>("ticks");
+    let _table = client_cache.get_or_make_table::<Ticks>("ticks");
     _table.add_unique_constraint::<u64>("id", |row| &row.id);
 }
 pub struct TicksUpdateCallbackId(__sdk::CallbackId);
@@ -105,9 +105,9 @@ impl<'ctx> __sdk::TableWithPrimaryKey for TicksTableHandle<'ctx> {
 #[doc(hidden)]
 pub(super) fn parse_table_update(
     raw_updates: __ws::TableUpdate<__ws::BsatnFormat>,
-) -> __sdk::Result<__sdk::TableUpdate<TickSchedule>> {
+) -> __sdk::Result<__sdk::TableUpdate<Ticks>> {
     __sdk::TableUpdate::parse_table_update(raw_updates).map_err(|e| {
-        __sdk::InternalError::failed_parse("TableUpdate<TickSchedule>", "TableUpdate")
+        __sdk::InternalError::failed_parse("TableUpdate<Ticks>", "TableUpdate")
             .with_cause(e)
             .into()
     })
@@ -121,7 +121,7 @@ pub(super) fn parse_table_update(
 /// but to directly chain method calls,
 /// like `ctx.db.ticks().id().find(...)`.
 pub struct TicksIdUnique<'ctx> {
-    imp: __sdk::UniqueConstraintHandle<TickSchedule, u64>,
+    imp: __sdk::UniqueConstraintHandle<Ticks, u64>,
     phantom: std::marker::PhantomData<&'ctx super::RemoteTables>,
 }
 
@@ -138,7 +138,7 @@ impl<'ctx> TicksTableHandle<'ctx> {
 impl<'ctx> TicksIdUnique<'ctx> {
     /// Find the subscribed row whose `id` column value is equal to `col_val`,
     /// if such a row is present in the client cache.
-    pub fn find(&self, col_val: &u64) -> Option<TickSchedule> {
+    pub fn find(&self, col_val: &u64) -> Option<Ticks> {
         self.imp.find(col_val)
     }
 }

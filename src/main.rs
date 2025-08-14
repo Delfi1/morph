@@ -10,87 +10,146 @@ use bevy::{
 use bevy_spacetimedb::*;
 
 mod stdb;
-use spacetimedb_sdk::{Table, TableWithPrimaryKey};
 use stdb::*;
+use spacetimedb_sdk::*;
 
-pub type SpacetimeDB<'a> = Res<'a, StdbConnection<DbConnection>>;
+pub type SpacetimeDB<'a> = Res<'a, StdbConnection<stdb::DbConnection>>;
 
-#[derive(Resource, Clone, Default)]
-pub struct AssetsQueue(Arc<RwLock<HashSet<u64>>>);
+// utils
+
+impl stdb::StIVec3 {
+    fn into(self) -> IVec3 { 
+        IVec3::new(self.x, self.y, self.z)
+    }
+}
+
+impl stdb::StVec3 {
+    fn into(self) -> Vec3 { 
+        Vec3::new(self.x, self.y, self.z)
+    }
+}
+
+// Components
+
+#[derive(Component)]
+pub struct Player {
+    pub id: u64,
+    pub name: String,
+    pub identity: Identity,
+    pub position: Vec3,
+}
+
+
+// Resources
+
+#[derive(Resource, Default)]
+/// Server stats
+pub struct TicksInfo {
+    // Current tick
+    pub tick: u128,
+    // Difference between previous tick
+    pub tickrate: f64,
+}
+
+// Systems
+
+fn on_connected(
+    mut events: ReadStdbConnectedEvent,
+    handler: SpacetimeDB,
+) {
+    for _ in events.read() {
+        handler.subscription_builder()
+            .on_applied(|_ctx| {
+                info!("Successful subscription!");
+            })
+            .on_error(|_ctx, err| {
+                error!("Subcribe error: {}", err);
+            })
+            .subscribe([
+                "SELECT * FROM player",
+                "SELECT * FROM block",
+                "SELECT * FROM asset",
+                "SELECT * FROM chunk",
+                "SELECT * FROM ticks",
+                "SELECT * FROM mesh",
+            ]);
+
+        info!("Players count: {}", handler.db().player().count());
+    }
+}
+
+fn on_asset_inserted(
+    mut events: ReadInsertEvent<stdb::Mesh>,
+    mut commands: Commands
+) {
+    for event in events.read() {
+
+    }
+}
+
+fn on_player_inserted(
+    mut events: ReadInsertEvent<stdb::Player>,
+    mut commands: Commands
+) {
+    for event in events.read() {
+        commands.spawn(Player {
+            id: event.row.id,
+            name: event.row.name.clone(),
+            identity: event.row.identity,
+            position: event.row.position.clone().into(),
+        });
+    }
+}
+
+fn on_chunk_inserted(
+    mut events: ReadInsertEvent<stdb::Chunk>,
+) {
+    for _event in events.read() {
+
+    }
+}
+
+fn on_mesh_inserted(
+    mut events: ReadInsertEvent<stdb::Mesh>,
+) {
+    for _event in events.read() {
+        
+    }
+}
+
+fn on_ticks_updated(
+    mut events: ReadUpdateEvent<stdb::Ticks>,
+    mut ticks_info: ResMut<TicksInfo>
+) {
+    for event in events.read() {
+        ticks_info.tick = event.new.tick;
+        ticks_info.tickrate = event.new.tickrate;
+    }
+}
 
 fn main() {
     App::new()
-        .init_resource::<AssetsQueue>()
         .add_plugins(
             StdbPlugin::default()
                 .with_uri("http://localhost:3000")
                 .with_module_name("morph")
-                .with_run_fn(DbConnection::run_threaded)
+                .with_run_fn(stdb::DbConnection::run_threaded)
+                .add_table(stdb::RemoteTables::asset)
+                .add_table(stdb::RemoteTables::player)
+                .add_table(stdb::RemoteTables::chunk)
+                .add_table(stdb::RemoteTables::mesh)
+                .add_table(stdb::RemoteTables::ticks)
             )
         .add_plugins(DefaultPlugins)
-        .add_systems(PreStartup, setup)
-        .add_systems(FixedPostUpdate, (queue_assets).chain())
+        .init_resource::<TicksInfo>()
+        .add_systems(
+            FixedPostUpdate, (
+            on_connected,
+            on_asset_inserted, 
+            on_player_inserted,
+            on_chunk_inserted,
+            on_mesh_inserted,
+            on_ticks_updated
+        ))
         .run();
-}
-
-fn setup(
-    mut commands: Commands,
-    assets_queue: Res<AssetsQueue>,
-    handler: SpacetimeDB,
-) {
-    let assets = assets_queue.into_inner();
-    commands.spawn(Camera3d::default());
-
-    handler.db().mesh().on_insert(move |_, mesh| {
-        println!("Inserted Mesh({:?}) = Vertices({})", mesh.position, mesh.vertices.len());
-    });
-
-    handler.db().chunk().on_insert(move |_, chunk| {
-        println!("Inserted Chunk({:?})", chunk.position);
-    });
-
-    let files = assets.clone();
-    handler.db().asset().on_insert(move |_, asset| {
-        let mut access = files.0.write().unwrap();
-        access.insert(asset.id);
-    });
-
-    let files = assets.clone();
-    handler.db().asset().on_update(move |_, _, asset| {
-        let mut access = files.0.write().unwrap();
-        access.insert(asset.id);
-    });
-
-    handler.subscription_builder()
-        .on_applied(|_ctx| {
-            println!("Successful subscription!");
-        })
-        .on_error(|_ctx, err| {
-            eprintln!("Subcribe error: {}", err);
-        })
-        .subscribe([
-            "SELECT * FROM player",
-            "SELECT * FROM block",
-            "SELECT * FROM asset",
-            "SELECT * FROM chunk",
-            "SELECT * FROM ticks",
-            "SELECT * FROM mesh",
-        ]);
-}
-
-fn queue_assets(
-    assets_queue: Res<AssetsQueue>,
-    handler: SpacetimeDB,
-    assets: Res<EmbeddedAssetRegistry>,
-) {
-    let mut access = assets_queue.0.write().unwrap();
-    for id in access.drain() {
-        let asset = handler.db().asset().id().find(&id).unwrap();
-        println!("Queued asset: {}", asset.name);
-
-        let full = PathBuf::from("");
-        let relative = PathBuf::from(asset.name);
-
-        assets.insert_asset(full, &relative, asset.value);
-    }
 }

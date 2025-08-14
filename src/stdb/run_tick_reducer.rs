@@ -6,12 +6,12 @@
 #![allow(unused, clippy::all)]
 use spacetimedb_sdk::__codegen::{self as __sdk, __lib, __sats, __ws};
 
-use super::tick_schedule_type::TickSchedule;
+use super::ticks_type::Ticks;
 
 #[derive(__lib::ser::Serialize, __lib::de::Deserialize, Clone, PartialEq, Debug)]
 #[sats(crate = __lib)]
 pub(super) struct RunTickArgs {
-    pub arg: TickSchedule,
+    pub arg: Ticks,
 }
 
 impl From<RunTickArgs> for super::Reducer {
@@ -36,7 +36,7 @@ pub trait run_tick {
     /// This method returns immediately, and errors only if we are unable to send the request.
     /// The reducer will run asynchronously in the future,
     ///  and its status can be observed by listening for [`Self::on_run_tick`] callbacks.
-    fn run_tick(&self, arg: TickSchedule) -> __sdk::Result<()>;
+    fn run_tick(&self, arg: Ticks) -> __sdk::Result<()>;
     /// Register a callback to run whenever we are notified of an invocation of the reducer `run_tick`.
     ///
     /// Callbacks should inspect the [`__sdk::ReducerEvent`] contained in the [`super::ReducerEventContext`]
@@ -46,7 +46,7 @@ pub trait run_tick {
     /// to cancel the callback.
     fn on_run_tick(
         &self,
-        callback: impl FnMut(&super::ReducerEventContext, &TickSchedule) + Send + 'static,
+        callback: impl FnMut(&super::ReducerEventContext, &Ticks) + Send + 'static,
     ) -> RunTickCallbackId;
     /// Cancel a callback previously registered by [`Self::on_run_tick`],
     /// causing it not to run in the future.
@@ -54,12 +54,12 @@ pub trait run_tick {
 }
 
 impl run_tick for super::RemoteReducers {
-    fn run_tick(&self, arg: TickSchedule) -> __sdk::Result<()> {
+    fn run_tick(&self, arg: Ticks) -> __sdk::Result<()> {
         self.imp.call_reducer("run_tick", RunTickArgs { arg })
     }
     fn on_run_tick(
         &self,
-        mut callback: impl FnMut(&super::ReducerEventContext, &TickSchedule) + Send + 'static,
+        mut callback: impl FnMut(&super::ReducerEventContext, &Ticks) + Send + 'static,
     ) -> RunTickCallbackId {
         RunTickCallbackId(self.imp.on_reducer(
             "run_tick",

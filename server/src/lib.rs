@@ -35,7 +35,7 @@ pub fn init(ctx: &ReducerContext) -> Result<(), String> {
 
     // Begin ticks loop
     let delta = TimeDuration::from_micros(TICK);
-    ctx.db.ticks().insert(TickSchedule {
+    ctx.db.ticks().insert(Ticks {
         id: 0,
         scheduled_at: ScheduleAt::Interval(delta),
         previous: ctx.timestamp,
@@ -57,7 +57,7 @@ pub fn identity_disconnected(_ctx: &ReducerContext) {
 }
 
 #[table(name = ticks, scheduled(run_tick), public)]
-pub struct TickSchedule {
+pub struct Ticks {
     #[primary_key]
     pub id: u64,
     pub scheduled_at: ScheduleAt,
@@ -68,7 +68,7 @@ pub struct TickSchedule {
 }
 
 #[reducer]
-fn run_tick(ctx: &ReducerContext, mut arg: TickSchedule) -> Result<(), String> {
+fn run_tick(ctx: &ReducerContext, mut arg: Ticks) -> Result<(), String> {
     if ctx.sender != ctx.identity() {
         return Err("Tick may not be invoked by clients, only via scheduling.".into());
     }

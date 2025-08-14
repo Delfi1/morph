@@ -11,6 +11,7 @@ use super::st_i_vec_3_type::StIVec3;
 #[derive(__lib::ser::Serialize, __lib::de::Deserialize, Clone, PartialEq, Debug)]
 #[sats(crate = __lib)]
 pub struct Chunk {
+    pub id: u64,
     pub position: StIVec3,
     pub blocks: Vec<u16>,
 }

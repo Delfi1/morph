@@ -26,8 +26,8 @@ pub mod scanner_type;
 pub mod st_asset_type;
 pub mod st_i_vec_3_type;
 pub mod st_vec_3_type;
-pub mod tick_schedule_type;
 pub mod ticks_table;
+pub mod ticks_type;
 
 pub use asset_table::*;
 pub use block_table::*;
@@ -55,8 +55,8 @@ pub use scanner_type::Scanner;
 pub use st_asset_type::StAsset;
 pub use st_i_vec_3_type::StIVec3;
 pub use st_vec_3_type::StVec3;
-pub use tick_schedule_type::TickSchedule;
 pub use ticks_table::*;
+pub use ticks_type::Ticks;
 
 #[derive(Clone, PartialEq, Debug)]
 
@@ -70,7 +70,7 @@ pub enum Reducer {
     IdentityConnected,
     IdentityDisconnected,
     Join,
-    RunTick { arg: TickSchedule },
+    RunTick { arg: Ticks },
 }
 
 impl __sdk::InModule for Reducer {
@@ -132,7 +132,7 @@ pub struct DbUpdate {
     mesh: __sdk::TableUpdate<Mesh>,
     player: __sdk::TableUpdate<Player>,
     scanner: __sdk::TableUpdate<Scanner>,
-    ticks: __sdk::TableUpdate<TickSchedule>,
+    ticks: __sdk::TableUpdate<Ticks>,
 }
 
 impl TryFrom<__ws::DatabaseUpdate<__ws::BsatnFormat>> for DbUpdate {
@@ -194,8 +194,12 @@ impl __sdk::DbUpdate for DbUpdate {
         diff.block = cache
             .apply_diff_to_table::<Block>("block", &self.block)
             .with_updates_by_pk(|row| &row.id);
-        diff.chunk = cache.apply_diff_to_table::<Chunk>("chunk", &self.chunk);
-        diff.mesh = cache.apply_diff_to_table::<Mesh>("mesh", &self.mesh);
+        diff.chunk = cache
+            .apply_diff_to_table::<Chunk>("chunk", &self.chunk)
+            .with_updates_by_pk(|row| &row.id);
+        diff.mesh = cache
+            .apply_diff_to_table::<Mesh>("mesh", &self.mesh)
+            .with_updates_by_pk(|row| &row.id);
         diff.player = cache
             .apply_diff_to_table::<Player>("player", &self.player)
             .with_updates_by_pk(|row| &row.id);
@@ -203,7 +207,7 @@ impl __sdk::DbUpdate for DbUpdate {
             .apply_diff_to_table::<Scanner>("scanner", &self.scanner)
             .with_updates_by_pk(|row| &row.identity);
         diff.ticks = cache
-            .apply_diff_to_table::<TickSchedule>("ticks", &self.ticks)
+            .apply_diff_to_table::<Ticks>("ticks", &self.ticks)
             .with_updates_by_pk(|row| &row.id);
 
         diff
@@ -220,7 +224,7 @@ pub struct AppliedDiff<'r> {
     mesh: __sdk::TableAppliedDiff<'r, Mesh>,
     player: __sdk::TableAppliedDiff<'r, Player>,
     scanner: __sdk::TableAppliedDiff<'r, Scanner>,
-    ticks: __sdk::TableAppliedDiff<'r, TickSchedule>,
+    ticks: __sdk::TableAppliedDiff<'r, Ticks>,
 }
 
 impl __sdk::InModule for AppliedDiff<'_> {
@@ -239,7 +243,7 @@ impl<'r> __sdk::AppliedDiff<'r> for AppliedDiff<'r> {
         callbacks.invoke_table_row_callbacks::<Mesh>("mesh", &self.mesh, event);
         callbacks.invoke_table_row_callbacks::<Player>("player", &self.player, event);
         callbacks.invoke_table_row_callbacks::<Scanner>("scanner", &self.scanner, event);
-        callbacks.invoke_table_row_callbacks::<TickSchedule>("ticks", &self.ticks, event);
+        callbacks.invoke_table_row_callbacks::<Ticks>("ticks", &self.ticks, event);
     }
 }
 

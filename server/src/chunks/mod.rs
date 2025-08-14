@@ -61,6 +61,10 @@ pub const SIZE_P3: usize = SIZE.pow(3);
 #[table(name = chunk, public)]
 #[derive(Debug)]
 pub struct Chunk {
+    #[auto_inc]
+    #[primary_key]
+    id: u64,
+
     #[unique]
     pub position: StIVec3,
     // Vec of blocks
@@ -73,7 +77,7 @@ impl Chunk {
     }
 
     pub fn new(position: StIVec3, blocks: Vec<u16>) -> Self {
-        Self { position, blocks }
+        Self { id: 0, position, blocks }
     }
 
     /// XZY coord system

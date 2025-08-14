@@ -183,6 +183,10 @@ impl Vertex {
 #[derive(Debug)]
 /// Mesh table (or cached mesh)
 pub struct Mesh {
+    #[auto_inc]
+    #[primary_key]
+    id: u64,
+
     #[unique]
     position: StIVec3,
     vertices: Vec<u32>,
@@ -247,6 +251,7 @@ pub async fn build_mesh(pos: IVec3, refs: ChunksRefs) -> Mesh {
     let indices = Mesh::generate_indices(&vertices);
 
     Mesh {
+        id: 0,
         position: pos.into(),
         vertices,
         indices
