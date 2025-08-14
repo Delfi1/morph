@@ -1,7 +1,24 @@
-use spacetimedb::{table, ReducerContext, SpacetimeType};
+use std::sync::*;
+use spacetimedb::{table, ReducerContext, Table, SpacetimeType};
+
+#[derive(Debug)]
+pub struct BlocksHandler(RwLock<Vec<Arc<Block>>>);
+
+impl BlocksHandler {
+    pub fn new(ctx: &ReducerContext) -> Self {
+        Self(RwLock::new(ctx.db.block().iter().map(|b| Arc::new(b)).collect()))
+    }
+
+    pub fn get(&self, id: u16) -> Option<Arc<Block>> {
+        let access = self.0.read().unwrap();
+        access.get(id as usize).cloned()
+    }
+}
+
+pub static BLOCKS_HANDLER: OnceLock<BlocksHandler> = OnceLock::new();
 
 #[derive(SpacetimeType)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
 // Model type with texture file name
 pub enum ModelType {
     Cube(String),
@@ -23,6 +40,7 @@ impl ModelType {
 
 // Block type table
 #[table(name = block, public)]
+#[derive(Debug)]
 pub struct Block {
     #[primary_key]
     pub id: u16,
@@ -35,8 +53,8 @@ pub struct Block {
     // collision? todo
 }
 
-pub fn is_meshable(ctx: &ReducerContext, id: u16) -> bool {
-    let Some(block) = ctx.db.block().id().find(id) else {
+pub fn is_meshable(id: u16) -> bool {
+    let Some(block) = BLOCKS_HANDLER.get().unwrap().get(id) else {
         return false; // block is not found
     };
 

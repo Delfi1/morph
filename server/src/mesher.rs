@@ -1,11 +1,37 @@
+use std::{
+    collections::*,
+    sync::*
+};
+
 use super::{
     math::*,
     chunks::{SIZE_I32, ChunksRefs, is_meshable}
 };
+use bevy_tasks::{block_on, AsyncComputeTaskPool, Task};
+use log::info;
 use spacetimedb::{
-    reducer, table, ReducerContext,
-    ScheduleAt, Table, TimeDuration
+    table, ReducerContext, Table,
+    //Filter, client_visibility_filter
 };
+
+#[derive(Debug)]
+pub struct Mesher {
+    pub queue: Vec<IVec3>,
+    pub tasks: HashMap<IVec3, Task<Mesh>>
+}
+
+impl Mesher {
+    pub const MAX_TASKS: usize = 16;
+
+    pub fn new() -> Self {
+        Self {
+            queue: Vec::new(),
+            tasks: HashMap::new()
+        }
+    }
+}
+
+pub static MESHER: OnceLock<RwLock<Mesher>> = OnceLock::new();
 
 // Also face normal
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -72,7 +98,7 @@ impl Direction {
     }
 }
 
-pub struct Face {x: i32, y: i32}
+pub struct Face { x: i32, y: i32 }
 
 /// All blocks face methods
 impl Face {
@@ -129,18 +155,17 @@ impl Face {
     }
 }
 
-/// Pocket of vertex data
-/// [6]bits - X (0-63)
-/// [6]bits - Y (0-63)
-/// [6]bits - Z (0-63)
-/// [3]bits - Face (0-7)
-/// [7]bits - texture_x (0-255)
-/// [1]bit - UVx (0/1)
-/// [1]bit - UVy (0/1)
 #[derive(Debug, Clone, Copy)]
 pub struct Vertex;
-
 impl Vertex {
+    /// Pocket of vertex data
+    /// [6]bits - X (0-63)
+    /// [6]bits - Y (0-63)
+    /// [6]bits - Z (0-63)
+    /// [3]bits - Face (0-7)
+    /// [7]bits - texture_x (0-255)
+    /// [1]bit - UVx (0/1)
+    /// [1]bit - UVy (0/1)
     pub fn new(local: IVec3, dir: Direction, block: u32, uv: &UVec2) -> u32 {
         let data = local.x as u32
         | (local.y as u32) << 6u32
@@ -155,6 +180,7 @@ impl Vertex {
 }
 
 #[table(name = mesh, public)]
+#[derive(Debug)]
 /// Mesh table (or cached mesh)
 pub struct Mesh {
     #[unique]
@@ -164,7 +190,7 @@ pub struct Mesh {
 }
 
 impl Mesh {
-    fn make_vertices(dir: Direction, ctx: &ReducerContext, refs: &ChunksRefs) -> Vec<u32> {
+    fn make_vertices(dir: Direction, refs: &ChunksRefs) -> Vec<u32> {
         let mut vertices = Vec::with_capacity(512);
         let size = SIZE_I32;
 
@@ -177,7 +203,7 @@ impl Mesh {
                 let (current, neg_z) =
                     (refs.get_block(pos), refs.get_block(pos + dir.air_sample()));
 
-                if is_meshable(ctx, current) && !is_meshable(ctx, neg_z) {
+                if is_meshable(current) && !is_meshable(neg_z) {
                     let face = Face::new(row, column);
                     vertices.extend(face.vertices(dir, axis, current));
                 }
@@ -187,12 +213,12 @@ impl Mesh {
         vertices
     }
 
-    pub fn build(ctx: &ReducerContext, refs: ChunksRefs) -> Vec<u32> {
+    pub fn build(refs: ChunksRefs) -> Vec<u32> {
         let mut vertices = Vec::new();
 
         // Apply all directions
         for dir in Direction::iter() {
-            vertices.extend(Self::make_vertices(dir, ctx, &refs));
+            vertices.extend(Self::make_vertices(dir, &refs));
         }
         
         vertices
@@ -216,46 +242,45 @@ impl Mesh {
     }
 }
 
-#[table(name = mesher_schedule, scheduled(run_mesher))]
-pub struct MeshBuildSchedule {
-    #[primary_key]
-    #[auto_inc]
-    pub scheduled_id: u64,
-    pub scheduled_at: ScheduleAt,
-    
-    #[unique]
-    pub position: StIVec3
-}
-
-
-#[reducer]
-fn run_mesher(ctx: &ReducerContext, arg: MeshBuildSchedule) -> Result<(), String> {
-    if ctx.sender != ctx.identity() {
-        return Err("Mesher may not be invoked by clients, only via scheduling.".into());
-    }
-
-    let Some(refs) = ChunksRefs::new(ctx, arg.position.into()) else {
-        ctx.db.mesher_schedule().scheduled_id().delete(&arg.scheduled_id);
-        
-        run_mesh_task(ctx, arg);
-        return Ok(());
-    };
-
-    let vertices = Mesh::build(ctx, refs);
+pub async fn build_mesh(pos: IVec3, refs: ChunksRefs) -> Mesh {
+    let vertices = Mesh::build(refs);
     let indices = Mesh::generate_indices(&vertices);
 
-    ctx.db.mesh().insert(Mesh {
-        position: arg.position,
+    Mesh {
+        position: pos.into(),
         vertices,
         indices
-    });
-
-    Ok(())
+    }
 }
 
-pub fn run_mesh_task(ctx: &ReducerContext, mut arg: MeshBuildSchedule) {
-    let delay = TimeDuration::from_micros(15_000);
+pub fn init_mesher() {
+    MESHER.set(RwLock::new(Mesher::new())).unwrap();
+}
 
-    arg.scheduled_at = (ctx.timestamp + delay).into();
-    ctx.db.mesher_schedule().insert(arg);
+pub fn proceed_mesher(ctx: &ReducerContext) {
+    let task_pool = AsyncComputeTaskPool::get();
+    let mut mesher = MESHER.get().unwrap().write().unwrap();
+
+    let l = mesher.queue.len().min(Mesher::MAX_TASKS - mesher.tasks.len());
+
+    for pos in mesher.queue.drain(0..l).collect::<Vec<IVec3>>() {
+        let Some(refs) = ChunksRefs::new(pos) else {
+            mesher.queue.push(pos);
+            continue;
+        };
+
+        let task = task_pool.spawn(build_mesh(pos, refs));
+        mesher.tasks.insert(pos, task);
+    }
+
+    for (pos, task) in mesher.tasks.drain().collect::<Vec<_>>() {
+        if !task.is_finished() {
+            mesher.tasks.insert(pos, task);
+            continue;
+        }
+
+        let mesh = block_on(task);
+        info!("Generated mesh: {}", pos);
+        ctx.db.mesh().insert(mesh);
+    }
 }

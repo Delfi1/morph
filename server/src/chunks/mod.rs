@@ -4,16 +4,17 @@
 // player access meshes - 16*16*16 chunks area
 // player position -> scanner chunk position 
 
-use super::{
-    math::*,
-    mesher::{MeshBuildSchedule, run_mesh_task}
-};
+use crate::mesher::MESHER;
+
+use super::math::*;
 use spacetimedb::{
-    reducer, table, ReducerContext,
-    ScheduleAt, Table, TimeDuration
+    table, ReducerContext, Table,
     //client_visibility_filter, Filter
 };
-use std::collections::*;
+use std::{
+    collections::*,
+    sync::*,
+};
 use include_directory::{include_directory, Dir};
 
 pub mod blocks;
@@ -22,8 +23,36 @@ use generate::*;
 
 pub use blocks::*;
 
-pub(super) static SCHEME_DIR: Dir<'_> = include_directory!("./scheme");
+pub(super) static SCHEME_DIR: Dir<'static> = include_directory!("./scheme");
 
+#[derive(Debug)]
+pub struct LoadArea(RwLock<HashMap<IVec3, Arc<Chunk>>>);
+
+impl LoadArea {
+    pub fn new() -> Self {
+        Self(RwLock::new(HashMap::new()))
+    }
+
+    pub fn insert(&self, position: IVec3, chunk: Arc<Chunk>) {
+        let mut access = self.0.write().unwrap();
+        access.insert(position, chunk);
+    }
+
+    pub fn get(&self, position: IVec3) -> Option<Arc<Chunk>> {
+        let access = self.0.read().unwrap();
+        access.get(&position).cloned()
+    }
+
+    pub fn _remove(&self, position: IVec3) {
+        let mut access = self.0.write().unwrap();
+        access.remove(&position);
+    }
+}
+
+// World data in RAM
+pub static LOAD_AREA: OnceLock<LoadArea> = OnceLock::new();
+
+// Chunk constants
 pub const SIZE: usize = 32;
 pub const SIZE_I32: i32 = SIZE as i32;
 pub const SIZE_P3: usize = SIZE.pow(3);
@@ -74,65 +103,15 @@ pub fn init_blocks(ctx: &ReducerContext) {
         let id = id as u16;
         ctx.db.block().insert(Block { id, name, model });
     }
-}
 
-#[table(name = chunk_schedule, scheduled(run_generator))]
-pub struct ChunkSchedule {
-    #[primary_key]
-    #[auto_inc]
-    pub scheduled_id: u64,
-    pub scheduled_at: ScheduleAt,
-    
-    #[unique]
-    pub position: StIVec3
-}
-
-#[reducer]
-fn run_generator(ctx: &ReducerContext, arg: ChunkSchedule) -> Result<(), String> {
-    if ctx.sender != ctx.identity() {
-        return Err("Generator may not be invoked by clients, only via scheduling.".into());
-    }
-
-    generate_chunk(ctx, arg.position.into());
-
-    run_mesh_task(ctx, MeshBuildSchedule {
-        scheduled_id: 0,
-        scheduled_at: ctx.timestamp.into(),
-        position: arg.position.into()
-    });
-    
-    Ok(())
-}
-
-/// Generate world area
-pub fn generate(ctx: &ReducerContext, range: usize) {
-    let mut area = HashSet::with_capacity(range.pow(3));
-
-    let range = range as i32;
-    for x in -range..=range {
-        for y in -range..=range {
-            for z in -range..=range {
-                area.insert(ivec3(x, y, z));
-            }
-        }
-    }
-
-    let delay = TimeDuration::from_micros(15_000);
-    let scheduled_at = (ctx.timestamp + delay).into();
-    for pos in area {
-        ctx.db.chunk_schedule().insert(ChunkSchedule {
-            scheduled_id: 0,
-            scheduled_at,
-            position: pos.into()
-        });
-    }
+    BLOCKS_HANDLER.set(BlocksHandler::new(ctx)).unwrap();
 }
 
 #[repr(transparent)]
 /// Contains all near chunks:
 /// 
 /// Current; Left; Right; Down; Up; Back; Forward;
-pub struct ChunksRefs([Chunk; 7]);
+pub struct ChunksRefs([Arc<Chunk>; 7]);
 
 impl ChunksRefs {
     // Array of chunk neighbours positions
@@ -155,15 +134,15 @@ impl ChunksRefs {
     }
 
     // Helper function: get chunk from BD
-    pub fn get_chunk(ctx: &ReducerContext, position: StIVec3) -> Option<Chunk> {
-        ctx.db.chunk().iter().find(|chunk| chunk.position == position)
+    pub fn get_chunk(position: IVec3) -> Option<Arc<Chunk>> {
+        LOAD_AREA.get().unwrap().get(position)
     }
 
     // Create chunk refs
-    pub fn new(ctx: &ReducerContext, pos: IVec3) -> Option<Self> {
-        let mut data = Vec::<Chunk>::with_capacity(7);
+    pub fn new(pos: IVec3) -> Option<Self> {
+        let mut data = Vec::<Arc<Chunk>>::with_capacity(7);
         for n in 0..7 {
-            data.push(Self::get_chunk(ctx, (pos + ChunksRefs::OFFSETS[n]).into())?)
+            data.push(Self::get_chunk(pos + ChunksRefs::OFFSETS[n])?)
         }
 
         Some(Self(Self::to_array(data)))
@@ -202,4 +181,35 @@ impl ChunksRefs {
 
         self.0[chunk].blocks[block]
     }
+}
+
+pub fn generate_world(ctx: &ReducerContext) {
+    LOAD_AREA.set(LoadArea::new()).unwrap();
+
+    let range = 4;
+    for x in -range..=range {
+        for y in -range..=range {
+            for z in -range..=range {
+                let pos = ivec3(x, y, z);
+                let Some(chunk) = generate_chunk(ctx, pos) else {
+                    continue;
+                };
+
+                LOAD_AREA.get().unwrap().insert(pos, Arc::new(chunk));
+            }
+        }
+    }
+
+    let mut mesher = MESHER.get().unwrap().write().unwrap();
+
+    let range = 3;
+    for x in -range..=range {
+        for y in -range..=range {
+            for z in -range..=range {
+                let pos = ivec3(x, y, z);
+                mesher.queue.push(pos);
+            }
+        }
+    }
+
 }

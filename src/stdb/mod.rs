@@ -9,34 +9,29 @@ use spacetimedb_sdk::__codegen::{self as __sdk, __lib, __sats, __ws};
 pub mod asset_table;
 pub mod block_table;
 pub mod block_type;
-pub mod chunk_schedule_table;
-pub mod chunk_schedule_type;
 pub mod chunk_table;
 pub mod chunk_type;
 pub mod create_player_reducer;
 pub mod identity_connected_reducer;
 pub mod identity_disconnected_reducer;
 pub mod join_reducer;
-pub mod mesh_build_schedule_type;
 pub mod mesh_table;
 pub mod mesh_type;
-pub mod mesher_schedule_table;
 pub mod model_type_type;
 pub mod player_table;
 pub mod player_type;
-pub mod run_generator_reducer;
-pub mod run_mesher_reducer;
 pub mod scanner_table;
 pub mod scanner_type;
 pub mod st_asset_type;
 pub mod st_i_vec_3_type;
 pub mod st_vec_3_type;
+pub mod tick_reducer;
+pub mod tick_schedule_table;
+pub mod tick_schedule_type;
 
 pub use asset_table::*;
 pub use block_table::*;
 pub use block_type::Block;
-pub use chunk_schedule_table::*;
-pub use chunk_schedule_type::ChunkSchedule;
 pub use chunk_table::*;
 pub use chunk_type::Chunk;
 pub use create_player_reducer::{
@@ -49,22 +44,19 @@ pub use identity_disconnected_reducer::{
     identity_disconnected, set_flags_for_identity_disconnected, IdentityDisconnectedCallbackId,
 };
 pub use join_reducer::{join, set_flags_for_join, JoinCallbackId};
-pub use mesh_build_schedule_type::MeshBuildSchedule;
 pub use mesh_table::*;
 pub use mesh_type::Mesh;
-pub use mesher_schedule_table::*;
 pub use model_type_type::ModelType;
 pub use player_table::*;
 pub use player_type::Player;
-pub use run_generator_reducer::{
-    run_generator, set_flags_for_run_generator, RunGeneratorCallbackId,
-};
-pub use run_mesher_reducer::{run_mesher, set_flags_for_run_mesher, RunMesherCallbackId};
 pub use scanner_table::*;
 pub use scanner_type::Scanner;
 pub use st_asset_type::StAsset;
 pub use st_i_vec_3_type::StIVec3;
 pub use st_vec_3_type::StVec3;
+pub use tick_reducer::{set_flags_for_tick, tick, TickCallbackId};
+pub use tick_schedule_table::*;
+pub use tick_schedule_type::TickSchedule;
 
 #[derive(Clone, PartialEq, Debug)]
 
@@ -78,8 +70,7 @@ pub enum Reducer {
     IdentityConnected,
     IdentityDisconnected,
     Join,
-    RunGenerator { arg: ChunkSchedule },
-    RunMesher { arg: MeshBuildSchedule },
+    Tick { arg: TickSchedule },
 }
 
 impl __sdk::InModule for Reducer {
@@ -93,8 +84,7 @@ impl __sdk::Reducer for Reducer {
             Reducer::IdentityConnected => "identity_connected",
             Reducer::IdentityDisconnected => "identity_disconnected",
             Reducer::Join => "join",
-            Reducer::RunGenerator { .. } => "run_generator",
-            Reducer::RunMesher { .. } => "run_mesher",
+            Reducer::Tick { .. } => "tick",
         }
     }
 }
@@ -117,16 +107,8 @@ impl TryFrom<__ws::ReducerCallInfo<__ws::BsatnFormat>> for Reducer {
             "join" => Ok(
                 __sdk::parse_reducer_args::<join_reducer::JoinArgs>("join", &value.args)?.into(),
             ),
-            "run_generator" => Ok(__sdk::parse_reducer_args::<
-                run_generator_reducer::RunGeneratorArgs,
-            >("run_generator", &value.args)?
-            .into()),
-            "run_mesher" => Ok(
-                __sdk::parse_reducer_args::<run_mesher_reducer::RunMesherArgs>(
-                    "run_mesher",
-                    &value.args,
-                )?
-                .into(),
+            "tick" => Ok(
+                __sdk::parse_reducer_args::<tick_reducer::TickArgs>("tick", &value.args)?.into(),
             ),
             unknown => {
                 Err(
@@ -145,11 +127,10 @@ pub struct DbUpdate {
     asset: __sdk::TableUpdate<StAsset>,
     block: __sdk::TableUpdate<Block>,
     chunk: __sdk::TableUpdate<Chunk>,
-    chunk_schedule: __sdk::TableUpdate<ChunkSchedule>,
     mesh: __sdk::TableUpdate<Mesh>,
-    mesher_schedule: __sdk::TableUpdate<MeshBuildSchedule>,
     player: __sdk::TableUpdate<Player>,
     scanner: __sdk::TableUpdate<Scanner>,
+    tick_schedule: __sdk::TableUpdate<TickSchedule>,
 }
 
 impl TryFrom<__ws::DatabaseUpdate<__ws::BsatnFormat>> for DbUpdate {
@@ -167,21 +148,18 @@ impl TryFrom<__ws::DatabaseUpdate<__ws::BsatnFormat>> for DbUpdate {
                 "chunk" => db_update
                     .chunk
                     .append(chunk_table::parse_table_update(table_update)?),
-                "chunk_schedule" => db_update
-                    .chunk_schedule
-                    .append(chunk_schedule_table::parse_table_update(table_update)?),
                 "mesh" => db_update
                     .mesh
                     .append(mesh_table::parse_table_update(table_update)?),
-                "mesher_schedule" => db_update
-                    .mesher_schedule
-                    .append(mesher_schedule_table::parse_table_update(table_update)?),
                 "player" => db_update
                     .player
                     .append(player_table::parse_table_update(table_update)?),
                 "scanner" => db_update
                     .scanner
                     .append(scanner_table::parse_table_update(table_update)?),
+                "tick_schedule" => db_update
+                    .tick_schedule
+                    .append(tick_schedule_table::parse_table_update(table_update)?),
 
                 unknown => {
                     return Err(__sdk::InternalError::unknown_name(
@@ -215,19 +193,16 @@ impl __sdk::DbUpdate for DbUpdate {
             .apply_diff_to_table::<Block>("block", &self.block)
             .with_updates_by_pk(|row| &row.id);
         diff.chunk = cache.apply_diff_to_table::<Chunk>("chunk", &self.chunk);
-        diff.chunk_schedule = cache
-            .apply_diff_to_table::<ChunkSchedule>("chunk_schedule", &self.chunk_schedule)
-            .with_updates_by_pk(|row| &row.scheduled_id);
         diff.mesh = cache.apply_diff_to_table::<Mesh>("mesh", &self.mesh);
-        diff.mesher_schedule = cache
-            .apply_diff_to_table::<MeshBuildSchedule>("mesher_schedule", &self.mesher_schedule)
-            .with_updates_by_pk(|row| &row.scheduled_id);
         diff.player = cache
             .apply_diff_to_table::<Player>("player", &self.player)
             .with_updates_by_pk(|row| &row.id);
         diff.scanner = cache
             .apply_diff_to_table::<Scanner>("scanner", &self.scanner)
             .with_updates_by_pk(|row| &row.identity);
+        diff.tick_schedule = cache
+            .apply_diff_to_table::<TickSchedule>("tick_schedule", &self.tick_schedule)
+            .with_updates_by_pk(|row| &row.scheduled_id);
 
         diff
     }
@@ -240,11 +215,10 @@ pub struct AppliedDiff<'r> {
     asset: __sdk::TableAppliedDiff<'r, StAsset>,
     block: __sdk::TableAppliedDiff<'r, Block>,
     chunk: __sdk::TableAppliedDiff<'r, Chunk>,
-    chunk_schedule: __sdk::TableAppliedDiff<'r, ChunkSchedule>,
     mesh: __sdk::TableAppliedDiff<'r, Mesh>,
-    mesher_schedule: __sdk::TableAppliedDiff<'r, MeshBuildSchedule>,
     player: __sdk::TableAppliedDiff<'r, Player>,
     scanner: __sdk::TableAppliedDiff<'r, Scanner>,
+    tick_schedule: __sdk::TableAppliedDiff<'r, TickSchedule>,
 }
 
 impl __sdk::InModule for AppliedDiff<'_> {
@@ -260,19 +234,14 @@ impl<'r> __sdk::AppliedDiff<'r> for AppliedDiff<'r> {
         callbacks.invoke_table_row_callbacks::<StAsset>("asset", &self.asset, event);
         callbacks.invoke_table_row_callbacks::<Block>("block", &self.block, event);
         callbacks.invoke_table_row_callbacks::<Chunk>("chunk", &self.chunk, event);
-        callbacks.invoke_table_row_callbacks::<ChunkSchedule>(
-            "chunk_schedule",
-            &self.chunk_schedule,
-            event,
-        );
         callbacks.invoke_table_row_callbacks::<Mesh>("mesh", &self.mesh, event);
-        callbacks.invoke_table_row_callbacks::<MeshBuildSchedule>(
-            "mesher_schedule",
-            &self.mesher_schedule,
-            event,
-        );
         callbacks.invoke_table_row_callbacks::<Player>("player", &self.player, event);
         callbacks.invoke_table_row_callbacks::<Scanner>("scanner", &self.scanner, event);
+        callbacks.invoke_table_row_callbacks::<TickSchedule>(
+            "tick_schedule",
+            &self.tick_schedule,
+            event,
+        );
     }
 }
 
@@ -851,10 +820,9 @@ impl __sdk::SpacetimeModule for RemoteModule {
         asset_table::register_table(client_cache);
         block_table::register_table(client_cache);
         chunk_table::register_table(client_cache);
-        chunk_schedule_table::register_table(client_cache);
         mesh_table::register_table(client_cache);
-        mesher_schedule_table::register_table(client_cache);
         player_table::register_table(client_cache);
         scanner_table::register_table(client_cache);
+        tick_schedule_table::register_table(client_cache);
     }
 }
