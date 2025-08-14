@@ -11,23 +11,23 @@ lto = "thin"
 version = "0.16.*"
 default-features = false
 features = [
-    "x11",
-    "std",
-    "png",
-    "bevy_ui",
-    "bevy_log",
-    "bevy_text",
-    "serialize",
+    "bevy_core_pipeline",
+    "multi_threaded",
+    "async_executor",
+    "default_font",
+    "bevy_render",
+    "bevy_window",
     "bevy_image",
     "bevy_state",
     "bevy_color",
     "bevy_asset",
-    "bevy_window",
-    "bevy_render",
-    "default_font",
-    "async_executor",
-    "multi_threaded",
-    "bevy_core_pipeline",
+    "bevy_text",
+    "serialize",
+    "bevy_log",
+    "bevy_ui",
+    "std",
+    "x11",
+    "png",
 ]
 
 [dependencies]
