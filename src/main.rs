@@ -73,6 +73,7 @@ fn setup(
             "SELECT * FROM block",
             "SELECT * FROM asset",
             "SELECT * FROM chunk",
+            "SELECT * FROM ticks",
             "SELECT * FROM mesh",
         ]);
 }

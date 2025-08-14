@@ -20,14 +20,14 @@ pub mod mesh_type;
 pub mod model_type_type;
 pub mod player_table;
 pub mod player_type;
+pub mod run_tick_reducer;
 pub mod scanner_table;
 pub mod scanner_type;
 pub mod st_asset_type;
 pub mod st_i_vec_3_type;
 pub mod st_vec_3_type;
-pub mod tick_reducer;
-pub mod tick_schedule_table;
 pub mod tick_schedule_type;
+pub mod ticks_table;
 
 pub use asset_table::*;
 pub use block_table::*;
@@ -49,14 +49,14 @@ pub use mesh_type::Mesh;
 pub use model_type_type::ModelType;
 pub use player_table::*;
 pub use player_type::Player;
+pub use run_tick_reducer::{run_tick, set_flags_for_run_tick, RunTickCallbackId};
 pub use scanner_table::*;
 pub use scanner_type::Scanner;
 pub use st_asset_type::StAsset;
 pub use st_i_vec_3_type::StIVec3;
 pub use st_vec_3_type::StVec3;
-pub use tick_reducer::{set_flags_for_tick, tick, TickCallbackId};
-pub use tick_schedule_table::*;
 pub use tick_schedule_type::TickSchedule;
+pub use ticks_table::*;
 
 #[derive(Clone, PartialEq, Debug)]
 
@@ -70,7 +70,7 @@ pub enum Reducer {
     IdentityConnected,
     IdentityDisconnected,
     Join,
-    Tick { arg: TickSchedule },
+    RunTick { arg: TickSchedule },
 }
 
 impl __sdk::InModule for Reducer {
@@ -84,7 +84,7 @@ impl __sdk::Reducer for Reducer {
             Reducer::IdentityConnected => "identity_connected",
             Reducer::IdentityDisconnected => "identity_disconnected",
             Reducer::Join => "join",
-            Reducer::Tick { .. } => "tick",
+            Reducer::RunTick { .. } => "run_tick",
         }
     }
 }
@@ -107,9 +107,11 @@ impl TryFrom<__ws::ReducerCallInfo<__ws::BsatnFormat>> for Reducer {
             "join" => Ok(
                 __sdk::parse_reducer_args::<join_reducer::JoinArgs>("join", &value.args)?.into(),
             ),
-            "tick" => Ok(
-                __sdk::parse_reducer_args::<tick_reducer::TickArgs>("tick", &value.args)?.into(),
-            ),
+            "run_tick" => Ok(__sdk::parse_reducer_args::<run_tick_reducer::RunTickArgs>(
+                "run_tick",
+                &value.args,
+            )?
+            .into()),
             unknown => {
                 Err(
                     __sdk::InternalError::unknown_name("reducer", unknown, "ReducerCallInfo")
@@ -130,7 +132,7 @@ pub struct DbUpdate {
     mesh: __sdk::TableUpdate<Mesh>,
     player: __sdk::TableUpdate<Player>,
     scanner: __sdk::TableUpdate<Scanner>,
-    tick_schedule: __sdk::TableUpdate<TickSchedule>,
+    ticks: __sdk::TableUpdate<TickSchedule>,
 }
 
 impl TryFrom<__ws::DatabaseUpdate<__ws::BsatnFormat>> for DbUpdate {
@@ -157,9 +159,9 @@ impl TryFrom<__ws::DatabaseUpdate<__ws::BsatnFormat>> for DbUpdate {
                 "scanner" => db_update
                     .scanner
                     .append(scanner_table::parse_table_update(table_update)?),
-                "tick_schedule" => db_update
-                    .tick_schedule
-                    .append(tick_schedule_table::parse_table_update(table_update)?),
+                "ticks" => db_update
+                    .ticks
+                    .append(ticks_table::parse_table_update(table_update)?),
 
                 unknown => {
                     return Err(__sdk::InternalError::unknown_name(
@@ -200,9 +202,9 @@ impl __sdk::DbUpdate for DbUpdate {
         diff.scanner = cache
             .apply_diff_to_table::<Scanner>("scanner", &self.scanner)
             .with_updates_by_pk(|row| &row.identity);
-        diff.tick_schedule = cache
-            .apply_diff_to_table::<TickSchedule>("tick_schedule", &self.tick_schedule)
-            .with_updates_by_pk(|row| &row.scheduled_id);
+        diff.ticks = cache
+            .apply_diff_to_table::<TickSchedule>("ticks", &self.ticks)
+            .with_updates_by_pk(|row| &row.id);
 
         diff
     }
@@ -218,7 +220,7 @@ pub struct AppliedDiff<'r> {
     mesh: __sdk::TableAppliedDiff<'r, Mesh>,
     player: __sdk::TableAppliedDiff<'r, Player>,
     scanner: __sdk::TableAppliedDiff<'r, Scanner>,
-    tick_schedule: __sdk::TableAppliedDiff<'r, TickSchedule>,
+    ticks: __sdk::TableAppliedDiff<'r, TickSchedule>,
 }
 
 impl __sdk::InModule for AppliedDiff<'_> {
@@ -237,11 +239,7 @@ impl<'r> __sdk::AppliedDiff<'r> for AppliedDiff<'r> {
         callbacks.invoke_table_row_callbacks::<Mesh>("mesh", &self.mesh, event);
         callbacks.invoke_table_row_callbacks::<Player>("player", &self.player, event);
         callbacks.invoke_table_row_callbacks::<Scanner>("scanner", &self.scanner, event);
-        callbacks.invoke_table_row_callbacks::<TickSchedule>(
-            "tick_schedule",
-            &self.tick_schedule,
-            event,
-        );
+        callbacks.invoke_table_row_callbacks::<TickSchedule>("ticks", &self.ticks, event);
     }
 }
 
@@ -823,6 +821,6 @@ impl __sdk::SpacetimeModule for RemoteModule {
         mesh_table::register_table(client_cache);
         player_table::register_table(client_cache);
         scanner_table::register_table(client_cache);
-        tick_schedule_table::register_table(client_cache);
+        ticks_table::register_table(client_cache);
     }
 }

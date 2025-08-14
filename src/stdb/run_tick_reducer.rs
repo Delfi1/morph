@@ -10,64 +10,64 @@ use super::tick_schedule_type::TickSchedule;
 
 #[derive(__lib::ser::Serialize, __lib::de::Deserialize, Clone, PartialEq, Debug)]
 #[sats(crate = __lib)]
-pub(super) struct TickArgs {
+pub(super) struct RunTickArgs {
     pub arg: TickSchedule,
 }
 
-impl From<TickArgs> for super::Reducer {
-    fn from(args: TickArgs) -> Self {
-        Self::Tick { arg: args.arg }
+impl From<RunTickArgs> for super::Reducer {
+    fn from(args: RunTickArgs) -> Self {
+        Self::RunTick { arg: args.arg }
     }
 }
 
-impl __sdk::InModule for TickArgs {
+impl __sdk::InModule for RunTickArgs {
     type Module = super::RemoteModule;
 }
 
-pub struct TickCallbackId(__sdk::CallbackId);
+pub struct RunTickCallbackId(__sdk::CallbackId);
 
 #[allow(non_camel_case_types)]
-/// Extension trait for access to the reducer `tick`.
+/// Extension trait for access to the reducer `run_tick`.
 ///
 /// Implemented for [`super::RemoteReducers`].
-pub trait tick {
-    /// Request that the remote module invoke the reducer `tick` to run as soon as possible.
+pub trait run_tick {
+    /// Request that the remote module invoke the reducer `run_tick` to run as soon as possible.
     ///
     /// This method returns immediately, and errors only if we are unable to send the request.
     /// The reducer will run asynchronously in the future,
-    ///  and its status can be observed by listening for [`Self::on_tick`] callbacks.
-    fn tick(&self, arg: TickSchedule) -> __sdk::Result<()>;
-    /// Register a callback to run whenever we are notified of an invocation of the reducer `tick`.
+    ///  and its status can be observed by listening for [`Self::on_run_tick`] callbacks.
+    fn run_tick(&self, arg: TickSchedule) -> __sdk::Result<()>;
+    /// Register a callback to run whenever we are notified of an invocation of the reducer `run_tick`.
     ///
     /// Callbacks should inspect the [`__sdk::ReducerEvent`] contained in the [`super::ReducerEventContext`]
     /// to determine the reducer's status.
     ///
-    /// The returned [`TickCallbackId`] can be passed to [`Self::remove_on_tick`]
+    /// The returned [`RunTickCallbackId`] can be passed to [`Self::remove_on_run_tick`]
     /// to cancel the callback.
-    fn on_tick(
+    fn on_run_tick(
         &self,
         callback: impl FnMut(&super::ReducerEventContext, &TickSchedule) + Send + 'static,
-    ) -> TickCallbackId;
-    /// Cancel a callback previously registered by [`Self::on_tick`],
+    ) -> RunTickCallbackId;
+    /// Cancel a callback previously registered by [`Self::on_run_tick`],
     /// causing it not to run in the future.
-    fn remove_on_tick(&self, callback: TickCallbackId);
+    fn remove_on_run_tick(&self, callback: RunTickCallbackId);
 }
 
-impl tick for super::RemoteReducers {
-    fn tick(&self, arg: TickSchedule) -> __sdk::Result<()> {
-        self.imp.call_reducer("tick", TickArgs { arg })
+impl run_tick for super::RemoteReducers {
+    fn run_tick(&self, arg: TickSchedule) -> __sdk::Result<()> {
+        self.imp.call_reducer("run_tick", RunTickArgs { arg })
     }
-    fn on_tick(
+    fn on_run_tick(
         &self,
         mut callback: impl FnMut(&super::ReducerEventContext, &TickSchedule) + Send + 'static,
-    ) -> TickCallbackId {
-        TickCallbackId(self.imp.on_reducer(
-            "tick",
+    ) -> RunTickCallbackId {
+        RunTickCallbackId(self.imp.on_reducer(
+            "run_tick",
             Box::new(move |ctx: &super::ReducerEventContext| {
                 let super::ReducerEventContext {
                     event:
                         __sdk::ReducerEvent {
-                            reducer: super::Reducer::Tick { arg },
+                            reducer: super::Reducer::RunTick { arg },
                             ..
                         },
                     ..
@@ -79,27 +79,27 @@ impl tick for super::RemoteReducers {
             }),
         ))
     }
-    fn remove_on_tick(&self, callback: TickCallbackId) {
-        self.imp.remove_on_reducer("tick", callback.0)
+    fn remove_on_run_tick(&self, callback: RunTickCallbackId) {
+        self.imp.remove_on_reducer("run_tick", callback.0)
     }
 }
 
 #[allow(non_camel_case_types)]
 #[doc(hidden)]
-/// Extension trait for setting the call-flags for the reducer `tick`.
+/// Extension trait for setting the call-flags for the reducer `run_tick`.
 ///
 /// Implemented for [`super::SetReducerFlags`].
 ///
 /// This type is currently unstable and may be removed without a major version bump.
-pub trait set_flags_for_tick {
-    /// Set the call-reducer flags for the reducer `tick` to `flags`.
+pub trait set_flags_for_run_tick {
+    /// Set the call-reducer flags for the reducer `run_tick` to `flags`.
     ///
     /// This type is currently unstable and may be removed without a major version bump.
-    fn tick(&self, flags: __ws::CallReducerFlags);
+    fn run_tick(&self, flags: __ws::CallReducerFlags);
 }
 
-impl set_flags_for_tick for super::SetReducerFlags {
-    fn tick(&self, flags: __ws::CallReducerFlags) {
-        self.imp.set_call_reducer_flags("tick", flags);
+impl set_flags_for_run_tick for super::SetReducerFlags {
+    fn run_tick(&self, flags: __ws::CallReducerFlags) {
+        self.imp.set_call_reducer_flags("run_tick", flags);
     }
 }

@@ -4,8 +4,7 @@
 use log::debug;
 use bevy_tasks::*;
 use spacetimedb::{
-    table, Table, reducer,
-    ReducerContext, ScheduleAt, TimeDuration
+    reducer, table, ReducerContext, ScheduleAt, Table, TimeDuration, Timestamp
 };
 
 pub mod math;
@@ -16,6 +15,9 @@ mod mesher;
 
 use assets::asset;
 use math::*;
+
+// Tick time in micros
+pub const TICK: i64 = 50_000;
 
 #[reducer(init)]
 pub fn init(ctx: &ReducerContext) -> Result<(), String> {
@@ -32,10 +34,12 @@ pub fn init(ctx: &ReducerContext) -> Result<(), String> {
     AsyncComputeTaskPool::get_or_init(|| TaskPool::new());
 
     // Begin ticks loop
-    let delta = TimeDuration::from_micros(10_000);
-    ctx.db.tick_schedule().insert(TickSchedule {
-        scheduled_id: 0,
+    let delta = TimeDuration::from_micros(TICK);
+    ctx.db.ticks().insert(TickSchedule {
+        id: 0,
         scheduled_at: ScheduleAt::Interval(delta),
+        previous: ctx.timestamp,
+        tickrate: 0.0,
         tick: 0
     });
 
@@ -52,23 +56,28 @@ pub fn identity_disconnected(_ctx: &ReducerContext) {
 
 }
 
-#[table(name = tick_schedule, scheduled(tick))]
+#[table(name = ticks, scheduled(run_tick), public)]
 pub struct TickSchedule {
     #[primary_key]
-    pub scheduled_id: u64,
+    pub id: u64,
     pub scheduled_at: ScheduleAt,
-    
+
+    previous: Timestamp,
+    pub tickrate: f64,
     pub tick: u128
 }
 
 #[reducer]
-fn tick(ctx: &ReducerContext, mut arg: TickSchedule) -> Result<(), String> {
+fn run_tick(ctx: &ReducerContext, mut arg: TickSchedule) -> Result<(), String> {
     if ctx.sender != ctx.identity() {
         return Err("Tick may not be invoked by clients, only via scheduling.".into());
     }
 
     // Begin tick
     arg.tick += 1;
+    let delta = ctx.timestamp.duration_since(arg.previous).unwrap();
+    arg.tickrate = 1.0 / delta.as_secs_f64();
+    arg.previous = ctx.timestamp;
 
     // Run mesher tasks
     mesher::proceed_mesher(ctx);
@@ -77,6 +86,6 @@ fn tick(ctx: &ReducerContext, mut arg: TickSchedule) -> Result<(), String> {
     AsyncComputeTaskPool::get()
         .with_local_executor(|executor| { executor.try_tick() });
 
-    ctx.db.tick_schedule().scheduled_id().update(arg);
+    ctx.db.ticks().id().update(arg);
     Ok(())
 }
