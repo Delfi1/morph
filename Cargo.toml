@@ -12,9 +12,11 @@ version = "0.16.*"
 default-features = false
 features = [
     "bevy_core_pipeline",
+    "embedded_watcher",
     "multi_threaded",
     "async_executor",
     "default_font",
+    "file_watcher",
     "bevy_render",
     "bevy_window",
     "bevy_image",
@@ -23,6 +25,7 @@ features = [
     "bevy_asset",
     "bevy_text",
     "serialize",
+    "bevy_pbr",
     "bevy_log",
     "bevy_ui",
     "std",

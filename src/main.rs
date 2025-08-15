@@ -6,6 +6,7 @@ use bevy::{
 };
 use bevy_spacetimedb::*;
 
+mod renderer;
 mod stdb;
 use stdb::*;
 use spacetimedb_sdk::*;
@@ -13,9 +14,12 @@ use spacetimedb_sdk::*;
 pub type SpacetimeDB<'a> = Res<'a, StdbConnection<stdb::DbConnection>>;
 
 // utils
+pub const SIZE: usize = 32;
+pub const SIZE_F32: f32 = SIZE as f32;
+pub const SIZE_P3: usize = SIZE.pow(3);
 
 impl stdb::StIVec3 {
-    fn _into(self) -> IVec3 { 
+    fn into(self) -> IVec3 { 
         IVec3::new(self.x, self.y, self.z)
     }
 }
@@ -38,6 +42,16 @@ pub struct Player {
 
 // Resources
 
+#[derive(Component)]
+// Current player marker
+pub struct CurrentPlayer;
+
+#[derive(Resource, Default)]
+pub struct PlayersHandler(HashMap<u64, Entity>);
+
+#[derive(Resource, Default)]
+pub struct MeshesHandler(HashMap<u64, Entity>);
+
 #[derive(Resource, Default)]
 /// Server stats
 pub struct TicksInfo {
@@ -46,9 +60,6 @@ pub struct TicksInfo {
     // Difference between previous tick
     pub tickrate: f64,
 }
-
-#[derive(Resource, Default)]
-pub struct TexturesHandler(HashMap<u16, Option<Handle<Image>>>);
 
 // Systems
 
@@ -77,7 +88,6 @@ fn on_connected(
     handler: SpacetimeDB,
 ) {
     for _ in events.read() {
-
         // Subscribe to assets
         handler.subscription_builder()
             .on_applied(subscribe_to_main)
@@ -132,29 +142,66 @@ impl Model {
 
 fn on_block_inserted(
     mut events: ReadInsertEvent<stdb::Block>,
-    mut textures: ResMut<TexturesHandler>,
-    assets: Res<AssetServer>,
+    _assets: Res<AssetServer>,
+    mut _commands: Commands,
 ) {
-    for event in events.read() {
-        info!("Inserted Block({}): {:?}", event.row.id, event.row.model);
+    for _event in events.read() {
 
-        let texture = Model::load(&event.row, &assets);
-
-        textures.0.insert(event.row.id, texture);
     }
 }
 
 fn on_player_inserted(
     mut events: ReadInsertEvent<stdb::Player>,
+    mut players: ResMut<PlayersHandler>,
+    handler: SpacetimeDB,
     mut commands: Commands
 ) {
     for event in events.read() {
-        commands.spawn(Player {
+        let mut player = commands.spawn(Player {
             id: event.row.id,
             name: event.row.name.clone(),
             identity: event.row.identity,
             position: event.row.position.clone().into(),
         });
+
+        if handler.identity() == event.row.identity {
+            player.insert((
+                CurrentPlayer,
+                Camera3d::default()
+            ));
+        } else {
+            // todo: test player model (sphere) and nickname text
+            //player.insert()
+        }
+
+        players.0.insert(event.row.id, player.id());
+    }
+}
+
+fn on_player_updated(
+    mut events: ReadUpdateEvent<stdb::Player>,
+    mut commands: Commands,
+    players: Res<PlayersHandler>
+) {
+    for event in events.read() {
+        let entity = players.0.get(&event.new.id).unwrap();
+        commands.entity(*entity).insert(Player {
+            id: event.new.id,
+            name: event.new.name.clone(),
+            identity: event.new.identity,
+            position: event.new.position.clone().into(),
+        });
+    }
+}
+
+fn on_player_deleted(
+    mut events: ReadDeleteEvent<stdb::Player>,
+    mut commands: Commands,
+    mut players: ResMut<PlayersHandler>
+) {
+    for event in events.read() {
+        let entity = players.0.remove(&event.row.id).unwrap();
+        commands.entity(entity).despawn();
     }
 }
 
@@ -168,9 +215,20 @@ fn on_chunk_inserted(
 
 fn on_mesh_inserted(
     mut events: ReadInsertEvent<stdb::Mesh>,
+    mut _meshes: ResMut<MeshesHandler>,
+) {
+    for event in events.read() {
+        let pos: IVec3 = event.row.position.clone().into();
+        info!("Inserted mesh: {}", pos);
+
+    }
+}
+
+fn on_mesh_updated(
+    mut events: ReadUpdateEvent<stdb::Mesh>,
 ) {
     for _event in events.read() {
-        
+
     }
 }
 
@@ -181,6 +239,16 @@ fn on_ticks_updated(
     for event in events.read() {
         ticks_info.tick = event.new.tick;
         ticks_info.tickrate = event.new.tickrate;
+    }
+}
+
+fn setup_window() -> WindowPlugin {
+    WindowPlugin {
+        primary_window: Some(Window {
+            title: "Morph".into(),
+            ..default()
+        }),
+        ..default()
     }
 }
 
@@ -198,18 +266,22 @@ fn main() {
                 .add_table(stdb::RemoteTables::ticks)
                 .add_table(stdb::RemoteTables::mesh)
             )
-        .add_plugins(DefaultPlugins)
+        .add_plugins(DefaultPlugins.set(setup_window()))
         .init_resource::<TicksInfo>()
-        .init_resource::<TexturesHandler>()
+        .init_resource::<PlayersHandler>()
+        .init_resource::<MeshesHandler>()
         .add_systems(
             FixedPostUpdate, (
             on_connected,
             on_player_inserted,
+            on_player_updated,
+            on_player_deleted,
             on_asset_inserted,
             on_asset_updated,
             on_block_inserted,
             on_chunk_inserted,
             on_mesh_inserted,
+            on_mesh_updated,
             on_ticks_updated
         ))
         .run();

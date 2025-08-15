@@ -9,7 +9,6 @@ use crate::mesher::MESHER;
 use super::math::*;
 use spacetimedb::{
     table, ReducerContext, Table,
-    //client_visibility_filter, Filter
 };
 use std::{
     collections::*,
@@ -23,7 +22,7 @@ use generate::*;
 
 pub use blocks::*;
 
-pub(super) static SCHEME_DIR: Dir<'static> = include_directory!("./scheme");
+pub(super) static SCHEME_DIR: Dir<'static> = include_directory!("./schema");
 
 #[derive(Debug)]
 pub struct LoadArea(RwLock<HashMap<IVec3, Arc<Chunk>>>);
@@ -49,7 +48,7 @@ impl LoadArea {
     }
 }
 
-// World data in RAM
+// Fast-access world data
 pub static LOAD_AREA: OnceLock<LoadArea> = OnceLock::new();
 
 // Chunk constants
