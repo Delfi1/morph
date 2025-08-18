@@ -1,12 +1,16 @@
-use std::path::PathBuf;
+use std::path::*;
 use bevy::{
+    asset::{io::embedded::EmbeddedAssetRegistry, *},
+    platform::collections::*, 
     prelude::*,
-    platform::collections::*,
-    asset::io::embedded::EmbeddedAssetRegistry
+    render::primitives::*,
+    app::*,
 };
+
 use bevy_spacetimedb::*;
 
 mod renderer;
+use renderer::*;
 mod stdb;
 use stdb::*;
 use spacetimedb_sdk::*;
@@ -37,7 +41,6 @@ pub struct Player {
     pub id: u64,
     pub name: String,
     pub identity: Identity,
-    pub position: Vec3,
 }
 
 // Resources
@@ -101,36 +104,48 @@ fn on_connected(
 }
 
 fn on_asset_inserted(
+    mut commands: Commands,
     mut events: ReadInsertEvent<stdb::StAsset>,
-    assets: Res<EmbeddedAssetRegistry>,
+    embedded_assets: Res<EmbeddedAssetRegistry>,
 ) {
     for event in events.read() {
         info!("Inserted asset: {}", event.row.name);
 
         let full = PathBuf::from("");
-        let relative = PathBuf::from(event.row.name.clone());
+        let relative = Path::new(&event.row.name);
 
-        assets.insert_asset(full, &relative, event.row.value.clone());
+        embedded_assets.insert_asset(full, &relative, event.row.value.clone());
+
+        // Insert required assets:
+        if event.row.name.eq("chunk.wgsl") {
+            commands.insert_resource(ChunkShaderLoader("embedded://chunk.wgsl"));
+        }
     }
 }
 
 fn on_asset_updated(
+    mut commands: Commands,
     mut events: ReadUpdateEvent<stdb::StAsset>,
-    assets: Res<EmbeddedAssetRegistry>,
+    embedded_assets: Res<EmbeddedAssetRegistry>,
 ) {
     for event in events.read() {
         info!("Updated asset: {}", event.new.name);
 
         let full = PathBuf::from("");
-        let relative = PathBuf::from(event.new.name.clone());
+        let relative = Path::new(&event.new.name);
 
-        assets.insert_asset(full, &relative, event.new.value.clone());
+        embedded_assets.insert_asset(full, &relative, event.new.value.clone());
+
+        // Update required assets:
+        if event.new.name.eq("chunk.wgsl") {
+            commands.insert_resource(ChunkShaderLoader("embedded://chunk.wgsl"));
+        }
     }
 }
 
 pub struct Model;
 impl Model {
-    pub fn load(block: &Block, assets: &AssetServer) -> Option<Handle<Image>>{
+    pub fn load(block: &Block, assets: &AssetServer) -> Option<Handle<Image>> {
         match &block.model {
             ModelType::Cube(path) => {
                 Some(assets.load(format!("embedded://{}", path)))
@@ -142,11 +157,14 @@ impl Model {
 
 fn on_block_inserted(
     mut events: ReadInsertEvent<stdb::Block>,
-    _assets: Res<AssetServer>,
-    mut _commands: Commands,
+    mut textures: ResMut<TexturesHandler>,
+    assets: Res<AssetServer>,
 ) {
-    for _event in events.read() {
+    if events.len() == 0 { return }
+    for event in events.read() {
+        let texture = Model::load(&event.row, &assets);
 
+        textures.0.insert(event.row.id, texture);
     }
 }
 
@@ -157,12 +175,13 @@ fn on_player_inserted(
     mut commands: Commands
 ) {
     for event in events.read() {
+        let position = event.row.position.clone().into();
         let mut player = commands.spawn(Player {
             id: event.row.id,
             name: event.row.name.clone(),
             identity: event.row.identity,
-            position: event.row.position.clone().into(),
         });
+        player.insert(Transform::from_translation(position));
 
         if handler.identity() == event.row.identity {
             player.insert((
@@ -184,13 +203,9 @@ fn on_player_updated(
     players: Res<PlayersHandler>
 ) {
     for event in events.read() {
+        let position = event.new.position.clone().into();
         let entity = players.0.get(&event.new.id).unwrap();
-        commands.entity(*entity).insert(Player {
-            id: event.new.id,
-            name: event.new.name.clone(),
-            identity: event.new.identity,
-            position: event.new.position.clone().into(),
-        });
+        commands.entity(*entity).insert(Transform::from_translation(position));
     }
 }
 
@@ -214,13 +229,30 @@ fn on_chunk_inserted(
 }
 
 fn on_mesh_inserted(
+    mut commands: Commands,
+    mut handler: ResMut<MeshesHandler>,
     mut events: ReadInsertEvent<stdb::Mesh>,
-    mut _meshes: ResMut<MeshesHandler>,
 ) {
     for event in events.read() {
-        let pos: IVec3 = event.row.position.clone().into();
-        info!("Inserted mesh: {}", pos);
+        if event.row.vertices.is_empty() { continue; }
+        let position = event.row.position.clone().into();
 
+        info!("Inserted mesh: {}", position);
+
+        let vertices = event.row.vertices.clone();
+        let indices = event.row.indices.clone();
+
+        let id = commands.spawn((
+            Visibility::default(),
+            Aabb::from_min_max(
+                Vec3::splat(-SIZE_F32 / 2.0),
+                Vec3::splat(SIZE_F32 * 1.5),
+            ),
+            ChunkMesh::new(vertices, indices),
+            Transform::from_translation(position.as_vec3() * Vec3::splat(SIZE_F32)),
+        )).id();
+
+        handler.0.insert(event.row.id, id);
     }
 }
 
@@ -242,6 +274,7 @@ fn on_ticks_updated(
     }
 }
 
+// Default window 
 fn setup_window() -> WindowPlugin {
     WindowPlugin {
         primary_window: Some(Window {
@@ -249,6 +282,43 @@ fn setup_window() -> WindowPlugin {
             ..default()
         }),
         ..default()
+    }
+}
+
+fn setup(
+    mut commands: Commands,
+) {
+    commands.spawn((
+        Camera3d::default(),
+        Transform::from_xyz(0.0, 8.0, 0.0).looking_at(Vec3::X, Vec3::Y),
+    ));
+}
+
+plugin_group! {
+    /// All Morph Project default plugins setup
+    pub struct MorphPlugins {
+        // Bevy plugins
+        bevy::app:::PanicHandlerPlugin,
+        bevy::log:::LogPlugin,
+        bevy::app:::TaskPoolPlugin,
+        bevy::diagnostic:::FrameCountPlugin,
+        bevy::time:::TimePlugin,
+        bevy::transform:::TransformPlugin,
+        bevy::diagnostic:::DiagnosticsPlugin,
+        bevy::input:::InputPlugin,
+        bevy::window:::WindowPlugin,
+        bevy::a11y:::AccessibilityPlugin,
+        #[custom(cfg(any(unix, windows)))]
+        bevy::app:::TerminalCtrlCHandlerPlugin,
+        bevy::asset:::AssetPlugin,
+        bevy::winit:::WinitPlugin,
+        bevy::render:::RenderPlugin,
+        bevy::render::texture:::ImagePlugin,
+        bevy::render::pipelined_rendering:::PipelinedRenderingPlugin,
+        bevy::core_pipeline:::CorePipelinePlugin,
+
+        // Main morph plugins
+        :RenderingPlugin,
     }
 }
 
@@ -266,10 +336,16 @@ fn main() {
                 .add_table(stdb::RemoteTables::ticks)
                 .add_table(stdb::RemoteTables::mesh)
             )
-        .add_plugins(DefaultPlugins.set(setup_window()))
+        .add_plugins(
+            MorphPlugins
+            .set(setup_window())
+            .set(ImagePlugin { default_sampler: default_sampler() })
+        )
         .init_resource::<TicksInfo>()
         .init_resource::<PlayersHandler>()
         .init_resource::<MeshesHandler>()
+        .init_resource::<TexturesHandler>()
+        .add_systems(Startup, setup)
         .add_systems(
             FixedPostUpdate, (
             on_connected,
@@ -282,7 +358,7 @@ fn main() {
             on_chunk_inserted,
             on_mesh_inserted,
             on_mesh_updated,
-            on_ticks_updated
+            on_ticks_updated,
         ))
         .run();
 }
