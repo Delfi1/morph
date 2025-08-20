@@ -40,6 +40,8 @@ fn prepare_chunks_buffers(
     meshes: Query<(Entity, Ref<ChunkMesh>), Without<ChunkBuffers>>,
 ) {
     for (entity, mesh) in meshes {
+        let transform = Mat4::from_translation(mesh.position);
+
         let mut vertices = RawBufferVec::new(BufferUsages::VERTEX);
         let mut indices = RawBufferVec::new(BufferUsages::INDEX);
 
@@ -56,23 +58,73 @@ fn prepare_chunks_buffers(
         info!("Prepare buffers...");
 
         let buffers = ChunkBuffers { vertices, indices };
+        let uniform = ChunkUniform { transform };
 
-        commands.entity(entity).insert(buffers);
+        commands.entity(entity).insert((buffers, uniform));
+    }
+}
+
+fn prepare_uniforms(
+    mut commands: Commands,
+    cameras: Query<(Entity, Ref<ExtractedView>)>
+) {
+    for (camera, view) in cameras.iter() {
+        let world_from_view = view.world_from_view.compute_matrix();
+
+        commands.entity(camera)
+            .insert(CameraUniform {
+                clip_from_view: view.clip_from_view,
+                view_from_world: world_from_view.inverse()
+            });
     }
 }
 
 fn prepare_pipeline(
     mut commands: Commands,
+    render_device: Res<RenderDevice>,
     loader: Option<Res<ChunkShaderLoader>>,
     pipeline: Option<Res<ChunksPipeline>>,
+    camera_uniforms: Res<ComponentUniforms<CameraUniform>>,
+    chunk_uniforms: Res<ComponentUniforms<ChunkUniform>>,
     assets: Res<AssetServer>,
 ) {
-    if pipeline.is_some() { return; }
     let Some(loader) = loader else { return };
+    if pipeline.is_some() { return; }
+
+    let Some(camera_binding) = camera_uniforms.uniforms().binding() else { return };
+    let Some(chunk_binding) = chunk_uniforms.uniforms().binding() else { return };
+
+    let camera_layout = render_device.create_bind_group_layout(
+        "camera_layout",
+        &BindGroupLayoutEntries::single(
+            ShaderStages::VERTEX,
+            uniform_buffer::<CameraUniform>(true),
+        ),
+    );
+
+    let chunk_layout = render_device.create_bind_group_layout(
+        "chunk_layout",
+        &BindGroupLayoutEntries::single(
+            ShaderStages::VERTEX,
+            uniform_buffer::<ChunkUniform>(true),
+        ),
+    );
+
+    let camera_bind = render_device.create_bind_group(
+        "camera_bind_group",
+        &camera_layout,
+        &BindGroupEntries::single(camera_binding)
+    );
+
+    let chunk_bind = render_device.create_bind_group(
+        "chunk_bind_group",
+        &chunk_layout,
+        &BindGroupEntries::single(chunk_binding)
+    );
 
     info!("Main chunk shader loaded");
     let shader = assets.load(loader.0);
-    commands.insert_resource(ChunksPipeline { shader });
+    commands.insert_resource(ChunksPipeline { shader, camera_layout, camera_bind, chunk_layout, chunk_bind });
     commands.init_resource::<SpecializedRenderPipelines<ChunksPipeline>>()
 }
 
@@ -107,8 +159,6 @@ fn queue_chunks(
             let this_tick = next_tick.get() + 1;
             next_tick.set(this_tick);
 
-            info!("Test!");
-
             opaque_phase.add(
                 Opaque3dBatchSetKey {
                     draw_function: draw_chunk,
@@ -131,16 +181,17 @@ fn queue_chunks(
 }
 
 #[derive(Clone, Component, ExtractComponent)]
-#[require(Transform, VisibilityClass)]
+#[require(VisibilityClass)]
 #[component(on_add = view::add_visibility_class::<ChunkMesh>)]
 pub struct ChunkMesh {
+    position: Vec3,
     vertices: Vec<u32>,
     indices: Vec<u32>,
 }
 
 impl ChunkMesh {
-    pub fn new(vertices: Vec<u32>, indices: Vec<u32>) -> Self {
-        Self { vertices, indices }
+    pub fn new(position: Vec3, vertices: Vec<u32>, indices: Vec<u32>) -> Self {
+        Self { position, vertices, indices }
     }
 }
 
@@ -156,7 +207,24 @@ pub struct ChunkShaderLoader(pub &'static str);
 
 #[derive(Resource)]
 struct ChunksPipeline {
-    shader: Handle<Shader>
+    shader: Handle<Shader>,
+    camera_layout: BindGroupLayout,
+    camera_bind: BindGroup,
+    chunk_layout: BindGroupLayout,
+    chunk_bind: BindGroup,
+}
+
+#[derive(Component, Default, Clone, Copy, ShaderType)]
+pub struct CameraUniform {
+    // Projection matrix
+    clip_from_view: Mat4,
+    // View matrix
+    view_from_world: Mat4
+}
+
+#[derive(Component, Default, Clone, Copy, ShaderType)]
+pub struct ChunkUniform {
+    transform: Mat4,
 }
 
 #[derive(Default)]
@@ -164,6 +232,8 @@ pub struct RenderingPlugin;
 impl Plugin for RenderingPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(ExtractComponentPlugin::<ChunkMesh>::default())
+            .add_plugins(UniformComponentPlugin::<CameraUniform>::default())
+            .add_plugins(UniformComponentPlugin::<ChunkUniform>::default())
             .add_plugins(ExtractResourcePlugin::<ChunkShaderLoader>::default());
 
         app.get_sub_app_mut(RenderApp)
@@ -173,6 +243,7 @@ impl Plugin for RenderingPlugin {
                 Render,
                 (
                     prepare_pipeline,
+                    prepare_uniforms,
                     prepare_chunks_buffers
                 ).in_set(RenderSet::Prepare),
             )
@@ -186,7 +257,7 @@ impl SpecializedRenderPipeline for ChunksPipeline {
     fn specialize(&self, msaa: Self::Key) -> RenderPipelineDescriptor {
         RenderPipelineDescriptor {
             label: Some("chunk render pipeline".into()),
-            layout: vec![],
+            layout: vec![self.camera_layout.clone(), self.chunk_layout.clone()],
             push_constant_ranges: vec![],
             vertex: VertexState {
                 shader: self.shader.clone(),
@@ -232,30 +303,68 @@ impl SpecializedRenderPipeline for ChunksPipeline {
     }
 }
 
+struct BindView;
+impl<P: PhaseItem> RenderCommand<P> for BindView {
+    type Param = Res<'static, ChunksPipeline>;
+
+    type ViewQuery = (
+        Ref<'static, CameraUniform>,
+        Ref<'static, DynamicUniformIndex<CameraUniform>>,
+    );
+
+    type ItemQuery = ();
+
+    fn render<'w>(
+        _: &P,
+        (_, camera_index): bevy::ecs::query::ROQueryItem<'w, Self::ViewQuery>,
+        _: Option<bevy::ecs::query::ROQueryItem<'w, Self::ItemQuery>>,
+        pipeline: bevy::ecs::system::SystemParamItem<'w, '_, Self::Param>,
+        pass: &mut TrackedRenderPass<'w>,
+    ) -> RenderCommandResult {
+        let pipeline = pipeline.into_inner();
+
+        pass.set_bind_group(
+            0,
+            &pipeline.camera_bind,
+            &[camera_index.index()]
+        );
+
+        RenderCommandResult::Success
+    }
+}
+
 // Main draw command
 struct DrawChunk;
 impl<P: PhaseItem> RenderCommand<P> for DrawChunk {
-    type Param = ();
+    type Param = Res<'static, ChunksPipeline>;
 
     type ViewQuery = ();
 
-    type ItemQuery = Ref<'static, ChunkBuffers>;
+    type ItemQuery = (
+        Ref<'static, ChunkBuffers>,
+        Ref<'static, ChunkUniform>,
+        Ref<'static, DynamicUniformIndex<ChunkUniform>>,
+    );
 
     fn render<'w>(
         _: &P,
         _: bevy::ecs::query::ROQueryItem<'w, Self::ViewQuery>,
         mesh: Option<bevy::ecs::query::ROQueryItem<'w, Self::ItemQuery>>,
-        _: bevy::ecs::system::SystemParamItem<'w, '_, Self::Param>,
+        pipeline: bevy::ecs::system::SystemParamItem<'w, '_, Self::Param>,
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
-        info!("Rendering...");
-
-        let Some(buffers) = mesh else { 
-            info!("Skip...");
+        let Some((buffers, _, chunk_index)) = mesh else { 
             return RenderCommandResult::Skip
         };
 
         let buffers = buffers.into_inner();
+        let pipeline = pipeline.into_inner();
+
+        pass.set_bind_group(
+            1,
+            &pipeline.chunk_bind,
+            &[chunk_index.index()]
+        );
 
         pass.set_vertex_buffer(
             0,
@@ -284,4 +393,4 @@ impl<P: PhaseItem> RenderCommand<P> for DrawChunk {
 }
 
 // todo view bind command
-type DrawChunkCommands = (SetItemPipeline, DrawChunk);
+type DrawChunkCommands = (SetItemPipeline, BindView, DrawChunk);

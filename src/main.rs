@@ -1,13 +1,18 @@
 use std::path::*;
 use bevy::{
-    asset::{io::embedded::EmbeddedAssetRegistry, *},
-    platform::collections::*, 
+    app::*,
+    asset::*,
     prelude::*,
     render::primitives::*,
-    app::*,
+    platform::collections::*, 
+    asset::io::embedded::EmbeddedAssetRegistry,
 };
 
 use bevy_spacetimedb::*;
+
+// debug:
+mod camera;
+use camera::*;
 
 mod renderer;
 use renderer::*;
@@ -19,6 +24,7 @@ pub type SpacetimeDB<'a> = Res<'a, StdbConnection<stdb::DbConnection>>;
 
 // utils
 pub const SIZE: usize = 32;
+pub const SIZE_I32: i32 = SIZE as i32;
 pub const SIZE_F32: f32 = SIZE as f32;
 pub const SIZE_P3: usize = SIZE.pow(3);
 
@@ -128,6 +134,8 @@ fn on_asset_updated(
     mut events: ReadUpdateEvent<stdb::StAsset>,
     embedded_assets: Res<EmbeddedAssetRegistry>,
 ) {
+    if events.is_empty() { return }
+
     for event in events.read() {
         info!("Updated asset: {}", event.new.name);
 
@@ -141,6 +149,8 @@ fn on_asset_updated(
             commands.insert_resource(ChunkShaderLoader("embedded://chunk.wgsl"));
         }
     }
+
+    // todo: hot-reload morph world
 }
 
 pub struct Model;
@@ -236,6 +246,7 @@ fn on_mesh_inserted(
     for event in events.read() {
         if event.row.vertices.is_empty() { continue; }
         let position = event.row.position.clone().into();
+        let global = position.as_vec3() * Vec3::splat(SIZE_F32);
 
         info!("Inserted mesh: {}", position);
 
@@ -248,8 +259,8 @@ fn on_mesh_inserted(
                 Vec3::splat(-SIZE_F32 / 2.0),
                 Vec3::splat(SIZE_F32 * 1.5),
             ),
-            ChunkMesh::new(vertices, indices),
-            Transform::from_translation(position.as_vec3() * Vec3::splat(SIZE_F32)),
+            ChunkMesh::new(global, vertices, indices),
+            Transform::from_translation(global)
         )).id();
 
         handler.0.insert(event.row.id, id);
@@ -260,7 +271,7 @@ fn on_mesh_updated(
     mut events: ReadUpdateEvent<stdb::Mesh>,
 ) {
     for _event in events.read() {
-
+        //todo: update mesh entity 
     }
 }
 
@@ -290,7 +301,8 @@ fn setup(
 ) {
     commands.spawn((
         Camera3d::default(),
-        Transform::from_xyz(0.0, 8.0, 0.0).looking_at(Vec3::X, Vec3::Y),
+        Transform::from_xyz(0.0, 4.0, 0.0),
+        MainCamera::new()
     ));
 }
 
@@ -316,9 +328,11 @@ plugin_group! {
         bevy::render::texture:::ImagePlugin,
         bevy::render::pipelined_rendering:::PipelinedRenderingPlugin,
         bevy::core_pipeline:::CorePipelinePlugin,
+        bevy::pbr:::PbrPlugin,
 
         // Main morph plugins
         :RenderingPlugin,
+        :CameraPlugin
     }
 }
 
@@ -346,8 +360,7 @@ fn main() {
         .init_resource::<MeshesHandler>()
         .init_resource::<TexturesHandler>()
         .add_systems(Startup, setup)
-        .add_systems(
-            FixedPostUpdate, (
+        .add_systems(FixedPostUpdate, (
             on_connected,
             on_player_inserted,
             on_player_updated,
