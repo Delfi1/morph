@@ -5,7 +5,7 @@ use std::{
 
 use super::{
     math::*,
-    chunks::{SIZE_I32, ChunksRefs, is_meshable}
+    chunks::{SIZE_I32, ChunksRefs, BLOCKS_HANDLER, Block}
 };
 use bevy_tasks::{block_on, AsyncComputeTaskPool, Task};
 use log::info;
@@ -115,33 +115,33 @@ impl Face {
     ];
 
     /// Make vertices from face
-    pub fn vertices(self, dir: Direction, mut axis: i32, block: u16) -> Vec<u32> {
+    pub fn vertices(self, dir: Direction, mut axis: i32, block: Arc<Block>) -> Vec<u32> {
         axis += dir.negate_axis();
         let v1 = Vertex::new(
             dir.world_sample(axis, self.x, self.y), 
             dir,
-            block as u32,
+            &block,
             &Self::UVS[0]
         );
 
         let v2 = Vertex::new(
             dir.world_sample(axis, self.x + 1, self.y), 
             dir,
-            block as u32,
+            &block,
             &Self::UVS[1]
         );
 
         let v3 = Vertex::new(
             dir.world_sample(axis, self.x + 1, self.y + 1), 
             dir,
-            block as u32,
+            &block,
             &Self::UVS[2]
         );
 
         let v4 = Vertex::new(
             dir.world_sample(axis, self.x, self.y + 1), 
             dir,
-            block as u32,
+            &block,
             &Self::UVS[3]
         );
         
@@ -163,17 +163,19 @@ impl Vertex {
     /// [6]bits - Y (0-63)
     /// [6]bits - Z (0-63)
     /// [3]bits - Face (0-7)
-    /// [7]bits - texture_x (0-255)
     /// [1]bit - UVx (0/1)
     /// [1]bit - UVy (0/1)
-    pub fn new(local: IVec3, dir: Direction, block: u32, uv: &UVec2) -> u32 {
+    /// [2]birs - block type (0-3)
+    /// [7]bits - block id (also texture id) (0-127)
+    pub fn new(local: IVec3, dir: Direction, block: &Block, uv: &UVec2) -> u32 {
         let data = local.x as u32
         | (local.y as u32) << 6u32
         | (local.z as u32) << 12u32
         | (dir.to_u32()) << 18u32
-        | (block) << 21u32 // Block id also texture id in binding array 
-        | (uv.x) << 28u32  // UV may be only 0 or 1
-        | (uv.y) << 29u32;
+        | (uv.x) << 21u32
+        | (uv.y) << 22u32
+        | (block.model.get()) << 23u32
+        | (block.id as u32) << 25u32;
         
         data
     }
@@ -196,6 +198,7 @@ pub struct Mesh {
 impl Mesh {
     fn make_vertices(dir: Direction, refs: &ChunksRefs) -> Vec<u32> {
         let mut vertices = Vec::with_capacity(512);
+        let handler = BLOCKS_HANDLER.get().unwrap();
         let size = SIZE_I32;
 
         // Culled meshser
@@ -204,10 +207,11 @@ impl Mesh {
                 let row = i % size;
                 let column = i / size;
                 let pos = dir.world_sample(axis, row, column);
-                let (current, neg_z) =
-                    (refs.get_block(pos), refs.get_block(pos + dir.air_sample()));
 
-                if is_meshable(current) && !is_meshable(neg_z) {
+                let current = handler.get(refs.get_block(pos)).unwrap();
+                let neg_z = handler.get(refs.get_block(pos + dir.air_sample())).unwrap();
+
+                if current.is_meshable() && !neg_z.is_meshable() {
                     let face = Face::new(row, column);
                     vertices.extend(face.vertices(dir, axis, current));
                 }

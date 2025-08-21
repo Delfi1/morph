@@ -1,7 +1,6 @@
 use std::path::*;
 use bevy::{
     app::*,
-    asset::*,
     prelude::*,
     render::primitives::*,
     platform::collections::*, 
@@ -9,6 +8,7 @@ use bevy::{
 };
 
 use bevy_spacetimedb::*;
+use bevy_cobweb_ui::prelude::*;
 
 // debug:
 mod camera;
@@ -153,29 +153,22 @@ fn on_asset_updated(
     // todo: hot-reload morph world
 }
 
-pub struct Model;
-impl Model {
-    pub fn load(block: &Block, assets: &AssetServer) -> Option<Handle<Image>> {
-        match &block.model {
-            ModelType::Cube(path) => {
-                Some(assets.load(format!("embedded://{}", path)))
-            },
-            _ => None
-        }
-    }
-}
-
 fn on_block_inserted(
+    mut commands: Commands,
+    mut handler: SpacetimeDB,
     mut events: ReadInsertEvent<stdb::Block>,
-    mut textures: ResMut<TexturesHandler>,
-    assets: Res<AssetServer>,
 ) {
-    if events.len() == 0 { return }
-    for event in events.read() {
-        let texture = Model::load(&event.row, &assets);
+    if events.is_empty() { return }
+    events.clear();
 
-        textures.0.insert(event.row.id, texture);
-    }
+    let l = handler.db().block().count() as usize;
+    let mut blocks = HashMap::with_capacity(l);
+
+    for block in handler.db().block().iter() {
+        blocks.insert(block.id, block);
+    }    
+
+    commands.insert_resource(LoadBlocksHandler(blocks));
 }
 
 fn on_player_inserted(
@@ -196,7 +189,9 @@ fn on_player_inserted(
         if handler.identity() == event.row.identity {
             player.insert((
                 CurrentPlayer,
-                Camera3d::default()
+                Camera3d::default(),
+                Transform::from_xyz(0.0, 4.0, 0.0),
+                MainCamera::new()
             ));
         } else {
             // todo: test player model (sphere) and nickname text
@@ -301,7 +296,7 @@ fn setup(
 ) {
     commands.spawn((
         Camera3d::default(),
-        Transform::from_xyz(0.0, 4.0, 0.0),
+        Transform::from_xyz(0.0, 36.0, 0.0),
         MainCamera::new()
     ));
 }
@@ -332,7 +327,7 @@ plugin_group! {
 
         // Main morph plugins
         :RenderingPlugin,
-        :CameraPlugin
+        :CameraPlugin,
     }
 }
 
@@ -358,7 +353,6 @@ fn main() {
         .init_resource::<TicksInfo>()
         .init_resource::<PlayersHandler>()
         .init_resource::<MeshesHandler>()
-        .init_resource::<TexturesHandler>()
         .add_systems(Startup, setup)
         .add_systems(FixedPostUpdate, (
             on_connected,

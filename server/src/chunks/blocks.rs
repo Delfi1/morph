@@ -21,14 +21,22 @@ pub static BLOCKS_HANDLER: OnceLock<BlocksHandler> = OnceLock::new();
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 // Model type with texture file name
 pub enum ModelType {
+    Empty,
     Cube(String),
     Stair(String),
     Slab(String),
-    Custom(String),
-    Empty
 }
 
 impl ModelType {
+    pub fn get(&self) -> u32 {
+        match self {
+            Self::Empty => 0,
+            Self::Cube(_) => 1,
+            Self::Stair(_) => 2,
+            Self::Slab(_) => 3,
+        }
+    }
+
     pub fn is_meshable(&self) -> bool {
         match self {
             Self::Cube(_) => true,
@@ -53,10 +61,8 @@ pub struct Block {
     // collision? todo
 }
 
-pub fn is_meshable(id: u16) -> bool {
-    let Some(block) = BLOCKS_HANDLER.get().unwrap().get(id) else {
-        return false; // block is not found
-    };
-
-    block.model.is_meshable()
+impl Block {
+    pub fn is_meshable(&self) -> bool {
+        self.model.is_meshable()
+    }
 }
