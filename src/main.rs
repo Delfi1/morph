@@ -166,7 +166,7 @@ fn on_block_inserted(
 
     for block in handler.db().block().iter() {
         blocks.insert(block.id, block);
-    }    
+    }
 
     commands.insert_resource(LoadBlocksHandler(blocks));
 }
@@ -318,12 +318,19 @@ plugin_group! {
         #[custom(cfg(any(unix, windows)))]
         bevy::app:::TerminalCtrlCHandlerPlugin,
         bevy::asset:::AssetPlugin,
+        bevy::scene:::ScenePlugin,
         bevy::winit:::WinitPlugin,
         bevy::render:::RenderPlugin,
         bevy::render::texture:::ImagePlugin,
         bevy::render::pipelined_rendering:::PipelinedRenderingPlugin,
         bevy::core_pipeline:::CorePipelinePlugin,
+        bevy::animation:::AnimationPlugin,
+        bevy::state::app:::StatesPlugin,
+        bevy::sprite:::SpritePlugin,
+        bevy::audio:::AudioPlugin,
+        bevy::text:::TextPlugin,
         bevy::pbr:::PbrPlugin,
+        bevy::ui:::UiPlugin,
 
         // Main morph plugins
         :RenderingPlugin,
@@ -350,6 +357,8 @@ fn main() {
             .set(setup_window())
             .set(ImagePlugin { default_sampler: default_sampler() })
         )
+        .add_plugins(bevy::picking::DefaultPickingPlugins)
+        .add_plugins(CobwebUiPlugin)
         .init_resource::<TicksInfo>()
         .init_resource::<PlayersHandler>()
         .init_resource::<MeshesHandler>()

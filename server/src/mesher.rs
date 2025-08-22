@@ -3,9 +3,11 @@ use std::{
     sync::*
 };
 
+use crate::chunks::BlocksHandler;
+
 use super::{
     math::*,
-    chunks::{SIZE_I32, ChunksRefs, BLOCKS_HANDLER, Block}
+    chunks::{SIZE_I32, ChunksRefs, Block}
 };
 use bevy_tasks::{block_on, AsyncComputeTaskPool, Task};
 use log::info;
@@ -198,7 +200,7 @@ pub struct Mesh {
 impl Mesh {
     fn make_vertices(dir: Direction, refs: &ChunksRefs) -> Vec<u32> {
         let mut vertices = Vec::with_capacity(512);
-        let handler = BLOCKS_HANDLER.get().unwrap();
+        let handler = BlocksHandler::get();
         let size = SIZE_I32;
 
         // Culled meshser
@@ -208,8 +210,8 @@ impl Mesh {
                 let column = i / size;
                 let pos = dir.world_sample(axis, row, column);
 
-                let current = handler.get(refs.get_block(pos)).unwrap();
-                let neg_z = handler.get(refs.get_block(pos + dir.air_sample())).unwrap();
+                let current = handler.block(refs.get_block(pos)).unwrap();
+                let neg_z = handler.block(refs.get_block(pos + dir.air_sample())).unwrap();
 
                 if current.is_meshable() && !neg_z.is_meshable() {
                     let face = Face::new(row, column);

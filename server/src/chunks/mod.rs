@@ -66,7 +66,6 @@ pub struct Chunk {
 
     #[unique]
     pub position: StIVec3,
-    // Vec of blocks
     pub blocks: Vec<u16>
 }
 
@@ -86,6 +85,14 @@ impl Chunk {
         let y = pos.y * SIZE_I32.pow(2);
 
         (x + y + z) as usize
+    }
+
+    pub fn get_block(&self, pos: IVec3) -> u16 {
+        self.blocks[Self::block_index(pos)]
+    }
+
+    pub fn set_block(&mut self, pos: IVec3, id: u16) {
+        self.blocks[Self::block_index(pos)] = id;
     }
 }
 
@@ -107,7 +114,7 @@ pub fn init_blocks(ctx: &ReducerContext) {
         ctx.db.block().insert(Block { id, name, model });
     }
 
-    BLOCKS_HANDLER.set(BlocksHandler::new(ctx)).unwrap();
+    BlocksHandler::init(ctx);
 }
 
 #[repr(transparent)]
@@ -189,14 +196,12 @@ impl ChunksRefs {
 pub fn generate_world(ctx: &ReducerContext) {
     LOAD_AREA.set(LoadArea::new()).unwrap();
 
-    let range = 4;
+    let range = 6;
     for x in -range..=range {
         for y in -range..=range {
             for z in -range..=range {
                 let pos = ivec3(x, y, z);
-                let Some(chunk) = generate_chunk(ctx, pos) else {
-                    continue;
-                };
+                let chunk = generate_chunk(ctx, pos);
 
                 LOAD_AREA.get().unwrap().insert(pos, Arc::new(chunk));
             }
@@ -205,7 +210,7 @@ pub fn generate_world(ctx: &ReducerContext) {
 
     let mut mesher = MESHER.get().unwrap().write().unwrap();
 
-    let range = 3;
+    let range = range - 2;
     for x in -range..=range {
         for y in -range..=range {
             for z in -range..=range {

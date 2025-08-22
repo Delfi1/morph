@@ -51,8 +51,8 @@ var<private> normals: array<vec3<f32>, 6> = array<vec3<f32>,6> (
 // Uv map (x0; y0; x1; y1)
 var<private> cube: array<vec4<f32>, 6> = array<vec4<f32>, 6>(
     vec4<f32>(0.625, 1.0, 0.375, 0.75),  // Up
-    vec4<f32>(0.625, 0.25, 0.875, 0.5),  // Left
-    vec4<f32>(0.125, 0.25, 0.375, 0.5),  // Right
+    vec4<f32>(0.625, 0.0, 0.875, 0.25),  // Left
+    vec4<f32>(0.125, 0.0, 0.375, 0.25),  // Right
     vec4<f32>(0.625, 0.0, 0.375, 0.25),  // Forward
     vec4<f32>(0.625, 0.75, 0.375, 0.5),  // Back
     vec4<f32>(0.625, 0.5, 0.375, 0.25),  // Down

@@ -3,19 +3,27 @@ use spacetimedb::{table, ReducerContext, Table, SpacetimeType};
 
 #[derive(Debug)]
 pub struct BlocksHandler(RwLock<Vec<Arc<Block>>>);
+static VALUE: OnceLock<BlocksHandler> = OnceLock::new();
 
 impl BlocksHandler {
     pub fn new(ctx: &ReducerContext) -> Self {
-        Self(RwLock::new(ctx.db.block().iter().map(|b| Arc::new(b)).collect()))
+        let blocks = ctx.db.block().iter().map(|b| Arc::new(b)).collect();
+        Self(RwLock::new(blocks))
     }
 
-    pub fn get(&self, id: u16) -> Option<Arc<Block>> {
+    pub fn init(ctx: &ReducerContext) {
+        VALUE.set(Self::new(ctx)).unwrap();
+    }
+
+    pub fn get() -> &'static Self {
+        VALUE.get().unwrap()
+    }
+
+    pub fn block(&self, id: u16) -> Option<Arc<Block>> {
         let access = self.0.read().unwrap();
         access.get(id as usize).cloned()
     }
 }
-
-pub static BLOCKS_HANDLER: OnceLock<BlocksHandler> = OnceLock::new();
 
 #[derive(SpacetimeType)]
 #[derive(Debug, serde::Serialize, serde::Deserialize)]

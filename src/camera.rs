@@ -43,12 +43,30 @@ impl Plugin for CameraPlugin {
     }
 }
 
+fn grab_mode(grab: &bool) -> CursorGrabMode {
+    match grab {
+        true => CursorGrabMode::Confined,
+        false => CursorGrabMode::None
+    }
+}
+
 fn camera_control(
-    mut cameras: Query<(Mut<MainCamera>, Mut<Transform>)>,
     time: Res<Time>,
+    mut grabbed: Local<bool>,
     kbd: Res<ButtonInput<KeyCode>>,
     mut evr_motion: EventReader<MouseMotion>,
+    mut window: Single<Mut<Window>, With<PrimaryWindow>>,
+    mut cameras: Query<(Mut<MainCamera>, Mut<Transform>)>,
 ) {
+    if kbd.just_pressed(KeyCode::Escape) {
+        *grabbed = !*grabbed;
+    }
+
+    window.cursor_options.grab_mode = grab_mode(&grabbed);
+    window.cursor_options.visible = !*grabbed;
+
+    if !*grabbed { return };
+
     let delta_time = time.delta().as_secs_f32();
 
     let mut motion = Vec2::ZERO;

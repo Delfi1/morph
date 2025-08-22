@@ -1,5 +1,6 @@
 [
     ["air", "Empty"],
     ["dirt", { "Cube": "dirt.png"} ],
-    ["grass", { "Cube": "grass.png"} ]
+    ["grass", { "Cube": "grass.png"} ],
+    ["stone", { "Cube": "stone.png"} ]
 ]
