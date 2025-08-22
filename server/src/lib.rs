@@ -23,6 +23,8 @@ pub const TICK: i64 = 50_000;
 pub fn init(ctx: &ReducerContext) -> Result<(), String> {
     // generate server assets
     assets::load_assets(&ctx);
+        let img = assets::load_asset_image(ctx, "perlin_32.png")
+        .expect("Нет ассета perlin_32.png");
 
     debug!("Total assets: {}", ctx.db.asset().count());
 

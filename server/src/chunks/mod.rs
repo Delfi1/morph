@@ -2,19 +2,14 @@
 
 // todo: player access chunks - 3*3*3 chunks area
 // player access meshes - 16*16*16 chunks area
-// player position -> scanner chunk position 
+// player position -> scanner chunk position
 
 use crate::mesher::MESHER;
 
 use super::math::*;
-use spacetimedb::{
-    table, ReducerContext, Table,
-};
-use std::{
-    collections::*,
-    sync::*,
-};
 use include_directory::{include_directory, Dir};
+use spacetimedb::{table, ReducerContext, Table};
+use std::{collections::*, sync::*};
 
 pub mod blocks;
 mod generate;
@@ -66,7 +61,7 @@ pub struct Chunk {
 
     #[unique]
     pub position: StIVec3,
-    pub blocks: Vec<u16>
+    pub blocks: Vec<u16>,
 }
 
 impl Chunk {
@@ -75,7 +70,11 @@ impl Chunk {
     }
 
     pub fn new(position: StIVec3, blocks: Vec<u16>) -> Self {
-        Self { id: 0, position, blocks }
+        Self {
+            id: 0,
+            position,
+            blocks,
+        }
     }
 
     /// XZY coord system
@@ -102,10 +101,12 @@ pub fn init_blocks(ctx: &ReducerContext) {
         ctx.db.block().id().delete(block.id);
     }
 
-    let blocks_file = SCHEME_DIR.get_file("blocks.json")
+    let blocks_file = SCHEME_DIR
+        .get_file("blocks.json")
         .expect("Blocks data file is not found");
-    
-    let blocks: Vec<(String, ModelType)> = blocks_file.contents_utf8()
+
+    let blocks: Vec<(String, ModelType)> = blocks_file
+        .contents_utf8()
         .and_then(|data| serde_json::from_str(data).ok())
         .expect("Blocks data file parse error");
 
@@ -119,7 +120,7 @@ pub fn init_blocks(ctx: &ReducerContext) {
 
 #[repr(transparent)]
 /// Contains all near chunks:
-/// 
+///
 /// Current; Left; Right; Down; Up; Back; Forward;
 pub struct ChunksRefs([Arc<Chunk>; 7]);
 
@@ -159,24 +160,24 @@ impl ChunksRefs {
     }
 
     fn offset_index(v: IVec3) -> usize {
-        Self::OFFSETS.iter().position(|p| p==&v).unwrap()
+        Self::OFFSETS.iter().position(|p| p == &v).unwrap()
     }
 
     fn chunk_index(x: usize, y: usize, z: usize) -> usize {
         let (cx, cy, cz) = (
             (x / Self::SIZE) as i32,
-            (y / Self::SIZE) as i32, 
-            (z / Self::SIZE) as i32
+            (y / Self::SIZE) as i32,
+            (z / Self::SIZE) as i32,
         );
-        
+
         Self::offset_index(IVec3::new(cx, cy, cz) - IVec3::ONE)
     }
-    
+
     fn block_index(x: usize, y: usize, z: usize) -> usize {
         let (bx, by, bz) = (
             (x % Self::SIZE) as i32,
             (y % Self::SIZE) as i32,
-            (z % Self::SIZE) as i32
+            (z % Self::SIZE) as i32,
         );
 
         Chunk::block_index(IVec3::new(bx, by, bz))
@@ -219,5 +220,4 @@ pub fn generate_world(ctx: &ReducerContext) {
             }
         }
     }
-
 }
