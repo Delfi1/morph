@@ -28,7 +28,7 @@ pub fn generate_chunk(ctx: &ReducerContext, pos: IVec3) -> Chunk {
     let l = vals.len();
 
     if pos.y == 0 {
-        for i in 0..SIZE.pow(2) {
+        for i in 0..SIZE.pow(3)/2 {
             let rand = ctx.rng().gen_range(0..l);
 
             blocks[i] = find_block(ctx, vals[rand]);
