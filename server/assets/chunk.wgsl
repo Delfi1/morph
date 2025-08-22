@@ -38,6 +38,8 @@ struct VertexOutput {
     @location(3) side: u32,
 }
 
+var<private> light: vec3<f32> = vec3<f32>(0.0, 0.0, 0.0);
+
 var<private> normals: array<vec3<f32>, 6> = array<vec3<f32>,6> (
 	vec3<f32>(0.0, 1.0, 0.0),   // Up
     vec3<f32>(-1.0, 0.0, 0.0),  // Left
