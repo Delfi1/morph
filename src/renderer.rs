@@ -22,6 +22,18 @@ use bevy::{
 };
 use super::stdb::{Block, ModelType};
 
+/// Default textures sampler
+pub fn default_sampler() -> ImageSamplerDescriptor {
+    ImageSamplerDescriptor {
+        address_mode_u: ImageAddressMode::Repeat,
+        address_mode_v: ImageAddressMode::Repeat,
+        mag_filter: ImageFilterMode::Nearest,
+        min_filter: ImageFilterMode::Linear,
+        mipmap_filter: ImageFilterMode::Nearest,
+        ..default()
+    }
+}
+
 pub struct Model;
 impl Model {
     pub fn load(block: &Block, assets: &AssetServer) -> Option<Handle<Image>> {
@@ -43,17 +55,57 @@ pub struct TexturesBindGroup(pub BindGroup);
 #[derive(Clone, Resource, ExtractResource, Default)]
 pub struct LoadBlocksHandler(pub HashMap<u16, Block>);
 
-/// Default textures sampler
-pub fn default_sampler() -> ImageSamplerDescriptor {
-    ImageSamplerDescriptor {
-        address_mode_u: ImageAddressMode::Repeat,
-        address_mode_v: ImageAddressMode::Repeat,
-        mag_filter: ImageFilterMode::Nearest,
-        min_filter: ImageFilterMode::Linear,
-        mipmap_filter: ImageFilterMode::Nearest,
-        ..default()
+#[derive(Clone, Component, ExtractComponent)]
+#[require(VisibilityClass)]
+#[component(on_add = view::add_visibility_class::<ChunkMesh>)]
+pub struct ChunkMesh {
+    position: Vec3,
+    vertices: Vec<u32>,
+    indices: Vec<u32>,
+}
+
+impl ChunkMesh {
+    pub fn new(position: Vec3, vertices: Vec<u32>, indices: Vec<u32>) -> Self {
+        Self { position, vertices, indices }
     }
 }
+
+#[derive(Component)]
+pub struct ChunkBuffers {
+    vertices: BufferVec<u32>,
+    indices: BufferVec<u32>,
+    bind: BindGroup
+}
+
+// Main chunks shader path
+#[derive(Clone, Resource, ExtractResource)]
+pub struct ChunkShaderLoader(pub &'static str);
+
+#[derive(Resource)]
+struct ChunksPipeline {
+    shader: Handle<Shader>,
+    camera_layout: BindGroupLayout,
+    camera_bind: BindGroup,
+    chunk_layout: BindGroupLayout,
+    textures_layout: BindGroupLayout,
+    sampler: Sampler
+}
+
+#[derive(Component, Default, Clone, Copy, ShaderType)]
+pub struct CameraUniform {
+    // Projection matrix
+    clip_from_view: Mat4,
+    // View matrix
+    view_from_world: Mat4
+}
+
+#[derive(Default, Clone, Copy, ShaderType)]
+pub struct ChunkUniform {
+    transform: Mat4,
+}
+
+// ------------------------------------------------------------------
+// Prepare and queue data systems 
 
 fn prepare_chunks_buffers(
     mut commands: Commands,
@@ -307,55 +359,6 @@ fn queue_chunks(
     }
 }
 
-#[derive(Clone, Component, ExtractComponent)]
-#[require(VisibilityClass)]
-#[component(on_add = view::add_visibility_class::<ChunkMesh>)]
-pub struct ChunkMesh {
-    position: Vec3,
-    vertices: Vec<u32>,
-    indices: Vec<u32>,
-}
-
-impl ChunkMesh {
-    pub fn new(position: Vec3, vertices: Vec<u32>, indices: Vec<u32>) -> Self {
-        Self { position, vertices, indices }
-    }
-}
-
-#[derive(Component)]
-pub struct ChunkBuffers {
-    vertices: BufferVec<u32>,
-    indices: BufferVec<u32>,
-    bind: BindGroup
-}
-
-// Main chunks shader path
-#[derive(Clone, Resource, ExtractResource)]
-pub struct ChunkShaderLoader(pub &'static str);
-
-#[derive(Resource)]
-struct ChunksPipeline {
-    shader: Handle<Shader>,
-    camera_layout: BindGroupLayout,
-    camera_bind: BindGroup,
-    chunk_layout: BindGroupLayout,
-    textures_layout: BindGroupLayout,
-    sampler: Sampler
-}
-
-#[derive(Component, Default, Clone, Copy, ShaderType)]
-pub struct CameraUniform {
-    // Projection matrix
-    clip_from_view: Mat4,
-    // View matrix
-    view_from_world: Mat4
-}
-
-#[derive(Default, Clone, Copy, ShaderType)]
-pub struct ChunkUniform {
-    transform: Mat4,
-}
-
 #[derive(Default)]
 pub struct RenderingPlugin;
 impl Plugin for RenderingPlugin {
@@ -381,6 +384,9 @@ impl Plugin for RenderingPlugin {
             .add_systems(Render, queue_chunks.in_set(RenderSet::Queue));
     }
 }
+
+// ------------------------------------------------------------------
+// Main rendering implementations
 
 impl SpecializedRenderPipeline for ChunksPipeline {
     type Key = Msaa;

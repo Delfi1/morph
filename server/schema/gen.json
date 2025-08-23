@@ -1,6 +1,8 @@
 {
   "chunk_range": 12,
-  "world_height": 4,
-  "world_bottom": -4,
-  "range_render": 12
+  "chunk_height_range": 4,
+  "chunk_bottom_range": -2,
+  "world_height_render": 6,
+  "world_bottom_render": -4,
+  "range_render": 14
 }

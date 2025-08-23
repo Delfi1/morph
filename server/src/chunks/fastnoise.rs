@@ -1,12 +1,3 @@
-//! Minimal FastNoise-like struct for Rust projects
-//! - Без зависимостей
-//! - Поддерживает Perlin и Value noise (2D)
-//! - Поддерживает фрактальный FBM (octaves / lacunarity / gain)
-//! - Конфиг через builder-методы
-//! - Псевдослучайность из seed через простую xorshift64*
-//!
-//! Пример использования см. внизу (tests/examples).
-
 #[derive(Clone, Copy, Debug)]
 pub enum NoiseType {
     Perlin,
@@ -298,4 +289,5 @@ fn main() {
 - Domain warp (перекос координат второй шумовой функцией).
 - SIMD/parallel (rayon + packed_simd/portable_simd).
 - Таблицы градиентов с 256 направлений для более мягких структур.
+- ШУМЫ НЕ ТРОГАТЬ Я ДОЛЖЕН САМ РАЗОБРАТЬСЯ
 */

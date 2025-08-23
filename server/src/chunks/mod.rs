@@ -10,7 +10,7 @@ use super::math::*;
 use include_directory::{Dir, include_directory};
 use spacetimedb::{ReducerContext, Table, table};
 use std::{collections::*, sync::*};
-
+use crate::chunks::config::WorldConfig;
 pub mod blocks;
 pub use blocks::*;
 mod generate;
@@ -196,16 +196,17 @@ impl ChunksRefs {
 }
 
 pub fn generate_world(ctx: &ReducerContext) {
-    use crate::chunks::config::WorldConfig;
-
     LOAD_AREA.set(LoadArea::new()).unwrap();
 
+    // перенес в json что бы можно было настраивать
     let cfg = WorldConfig::load(ctx);
+    
     let range = cfg.range_render;
-    let world_height = cfg.world_height;
+    let world_height = cfg.world_height_render;
+    let world_bottom = cfg.world_bottom_render;
 
     for x in -range..=range {
-        for y in -world_height..=world_height {
+        for y in world_bottom..=world_height {
             for z in -range..=range {
                 let pos = ivec3(x, y, z);
                 let chunk = generate_chunk(ctx, pos);
@@ -215,9 +216,9 @@ pub fn generate_world(ctx: &ReducerContext) {
     }
 
     let mut mesher = MESHER.get().unwrap().write().unwrap();
-    let range = range - 2;
+    let range = range;
     for x in -range..=range {
-        for y in -world_height + 1..=world_height - 1 {
+        for y in world_bottom + 1..=world_height - 1 {
             for z in -range..=range {
                 let pos = ivec3(x, y, z);
                 mesher.queue.push(pos);

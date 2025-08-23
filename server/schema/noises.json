@@ -1,0 +1,37 @@
+{
+  "noises": [
+    {
+      "name": "base",
+      "seed": 25129778,
+      "frequency": 0.02,
+      "octaves": 5,
+      "lacunarity": 0.9,
+      "gain": 0.5,
+      "noise_type": "Perlin",
+      "base_level_blocks": 4,
+      "amplitude_blocks": 14
+    },
+    {
+      "name": "mountain_mask",
+      "seed": 1543521,
+      "frequency": 0.005,
+      "octaves": 2,
+      "lacunarity": 2.0,
+      "gain": 0.5,
+      "noise_type": "Perlin",
+      "base_level_blocks": 0,
+      "amplitude_blocks": 1
+    },
+    {
+      "name": "mountain_height",
+      "seed": 98765,
+      "frequency": 0.015,
+      "octaves": 7,
+      "lacunarity": 2.0,
+      "gain": 0.5,
+      "noise_type": "Perlin",
+      "base_level_blocks": 64,
+      "amplitude_blocks": 220
+    }
+  ]
+}

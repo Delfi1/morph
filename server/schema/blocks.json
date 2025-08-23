@@ -2,5 +2,6 @@
     ["air", "Empty"],
     ["dirt", { "Cube": "dirt.png"} ],
     ["grass", { "Cube": "grass.png"} ],
+    ["error_pyrple", { "Cube": "error_pyrple.png"} ],
     ["stone", { "Cube": "stone.png"} ]
 ]

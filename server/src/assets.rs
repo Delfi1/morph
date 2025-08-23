@@ -39,10 +39,6 @@ pub fn load_assets(ctx: &ReducerContext) {
     }
 }
 
-pub fn get_asset_bytes(ctx: &ReducerContext, name: &str) -> Option<Vec<u8>> {
-    ctx.db.asset().name().find(name.to_string()).map(|f| f.value)
-}
-
 pub fn insert_or_update_asset_bytes(ctx: &ReducerContext, name: &str, bytes: Vec<u8>) {
     if let Some(mut dbfile) = ctx.db.asset().name().find(name.to_string()) {
         if dbfile.value != bytes {
