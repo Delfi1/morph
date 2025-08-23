@@ -1,5 +1,5 @@
 {
-  "chunk_range": 4,
+  "chunk_range": 12,
   "world_height": 4,
   "world_bottom": -4,
   "range_render": 12

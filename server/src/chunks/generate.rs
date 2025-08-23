@@ -15,6 +15,7 @@ pub fn find_block(ctx: &ReducerContext, name: impl Into<String>) -> u16 {
 
 pub fn generate_chunk(ctx: &ReducerContext, pos: IVec3) -> Chunk {
     let mut blocks = Chunk::empty();
+
     let cfg = WorldConfig::load(ctx);
     let noise_cfg = load_noise_config(ctx);
 
@@ -45,6 +46,7 @@ pub fn generate_chunk(ctx: &ReducerContext, pos: IVec3) -> Chunk {
                     if y < height {
                         let bpos = IVec3::new(x as i32, y, z as i32);
                         let index = Chunk::block_index(bpos);
+
                         if (index as usize) < blocks.len() {
                             blocks[index] = if height - 1 <= y {
                                 find_block(ctx, "grass")
@@ -59,6 +61,6 @@ pub fn generate_chunk(ctx: &ReducerContext, pos: IVec3) -> Chunk {
             }
         }
     }
-
+    
     ctx.db.chunk().insert(Chunk::new(pos.into(), blocks))
 }

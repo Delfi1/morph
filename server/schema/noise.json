@@ -1,10 +1,10 @@
 {
-  "seed": 1337,
-  "frequency": 0.02,
-  "octaves": 5,
-  "lacunarity": 2.0,
+  "seed": 249614575112,
+  "frequency": 0.005,
+  "octaves": 6,
+  "lacunarity": 1.5,
   "gain": 0.5,
   "noise_type": "Perlin",
-  "amplitude_blocks": 10,
-  "base_level_blocks": 16
+  "amplitude_blocks": 25,
+  "base_level_blocks": 20
 }
