@@ -26,9 +26,9 @@ pub struct NoiseConfig {
 const DEFAULT_GEN_JSON: &str = r#"
 {
   "chunk_range": 4,
-  "world_height": 4,
-  "world_bottom": -4,
-  "range_render": 12
+  "world_height": 5,
+  "world_bottom": -5,
+  "range_render": 5
 }
 "#;
 
