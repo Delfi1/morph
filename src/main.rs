@@ -18,6 +18,8 @@ mod renderer;
 use renderer::*;
 mod stdb;
 use stdb::*;
+mod ui;
+use ui::*;
 use spacetimedb_sdk::*;
 
 pub type SpacetimeDB<'a> = Res<'a, StdbConnection<stdb::DbConnection>>;
@@ -155,7 +157,7 @@ fn on_asset_updated(
 
 fn on_block_inserted(
     mut commands: Commands,
-    mut handler: SpacetimeDB,
+    handler: SpacetimeDB,
     mut events: ReadInsertEvent<stdb::Block>,
 ) {
     if events.is_empty() { return }
@@ -335,6 +337,7 @@ plugin_group! {
         // Main morph plugins
         :RenderingPlugin,
         :CameraPlugin,
+        :MorphUiPlugin
     }
 }
 
@@ -358,7 +361,12 @@ fn main() {
             .set(ImagePlugin { default_sampler: default_sampler() })
         )
         .add_plugins(bevy::picking::DefaultPickingPlugins)
+        // Load cobweb ui (main and debug)
         .add_plugins(CobwebUiPlugin)
+        .load("embedded://morph/main.cob")
+        //.add_systems(OnEnter(LoadState::Done), build_ui)
+        
+        // Main morph resources and systems
         .init_resource::<TicksInfo>()
         .init_resource::<PlayersHandler>()
         .init_resource::<MeshesHandler>()

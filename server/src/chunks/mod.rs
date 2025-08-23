@@ -7,15 +7,16 @@
 use crate::mesher::MESHER;
 
 use super::math::*;
-use include_directory::{include_directory, Dir};
-use spacetimedb::{table, ReducerContext, Table};
+use include_directory::{Dir, include_directory};
+use spacetimedb::{ReducerContext, Table, table};
 use std::{collections::*, sync::*};
 
 pub mod blocks;
+pub use blocks::*;
 mod generate;
 use generate::*;
-
-pub use blocks::*;
+pub mod config;
+pub mod fastnoise;
 
 pub(super) static SCHEME_DIR: Dir<'static> = include_directory!("./schema");
 
@@ -195,25 +196,28 @@ impl ChunksRefs {
 }
 
 pub fn generate_world(ctx: &ReducerContext) {
+    use crate::chunks::config::WorldConfig;
+
     LOAD_AREA.set(LoadArea::new()).unwrap();
 
-    let range = 6;
+    let cfg = WorldConfig::load(ctx);
+    let range = cfg.range_render;
+    let world_height = cfg.world_height;
+
     for x in -range..=range {
-        for y in -range..=range {
+        for y in -world_height..=world_height {
             for z in -range..=range {
                 let pos = ivec3(x, y, z);
                 let chunk = generate_chunk(ctx, pos);
-
                 LOAD_AREA.get().unwrap().insert(pos, Arc::new(chunk));
             }
         }
     }
 
     let mut mesher = MESHER.get().unwrap().write().unwrap();
-
     let range = range - 2;
     for x in -range..=range {
-        for y in -range..=range {
+        for y in -world_height + 1..=world_height - 1 {
             for z in -range..=range {
                 let pos = ivec3(x, y, z);
                 mesher.queue.push(pos);

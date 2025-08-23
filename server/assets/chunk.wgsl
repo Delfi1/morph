@@ -98,8 +98,9 @@ fn vertex(vertex: Vertex) -> VertexOutput {
 
 @fragment
 fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
-    // todo: shading and normales
+    let color: vec4<f32> = textureSample(textures[in.block], nearest_sampler, in.uv);
 
-    // draw vertices with green color
-    return textureSample(textures[in.block], nearest_sampler, in.uv);
+    // todo: add direction light
+
+    return color;
 }

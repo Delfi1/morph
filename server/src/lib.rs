@@ -1,20 +1,19 @@
 // todo: chunks, blocks metadata, client-side rendering,
 // server-side mesher, and meshes cache
 
-use log::debug;
 use bevy_tasks::*;
-use spacetimedb::{
-    reducer, table, ReducerContext, ScheduleAt, Table, TimeDuration, Timestamp
-};
-
-pub mod math;
-mod player;
+use log::debug;
+use spacetimedb::{ReducerContext, ScheduleAt, Table, TimeDuration, Timestamp, reducer, table};
 mod assets;
 mod chunks;
+pub mod math;
 mod mesher;
-
+mod player;
 use assets::asset;
 use math::*;
+
+use include_directory::{Dir, include_directory};
+pub static SCHEME_DIR: Dir<'static> = include_directory!("./schema");
 
 // Tick time in micros
 pub const TICK: i64 = 50_000;
@@ -23,16 +22,14 @@ pub const TICK: i64 = 50_000;
 pub fn init(ctx: &ReducerContext) -> Result<(), String> {
     // generate server assets
     assets::load_assets(&ctx);
-        let img = assets::load_asset_image(ctx, "perlin_32.png")
-        .expect("Нет ассета perlin_32.png");
+    assets::ensure_schema_assets(ctx);
 
     debug!("Total assets: {}", ctx.db.asset().count());
 
-    // create blocks and chunks data
     chunks::init_blocks(&ctx);
+
     mesher::init_mesher();
     chunks::generate_world(&ctx);
-
     AsyncComputeTaskPool::get_or_init(|| TaskPool::new());
 
     // Begin ticks loop
@@ -42,21 +39,17 @@ pub fn init(ctx: &ReducerContext) -> Result<(), String> {
         scheduled_at: ScheduleAt::Interval(delta),
         previous: ctx.timestamp,
         tickrate: 0.0,
-        tick: 0
+        tick: 0,
     });
 
     Ok(())
 }
 
 #[reducer(client_connected)]
-pub fn identity_connected(_ctx: &ReducerContext) {
-
-}
+pub fn identity_connected(_ctx: &ReducerContext) {}
 
 #[reducer(client_disconnected)]
-pub fn identity_disconnected(_ctx: &ReducerContext) {
-
-}
+pub fn identity_disconnected(_ctx: &ReducerContext) {}
 
 #[table(name = ticks, scheduled(run_tick), public)]
 pub struct Ticks {
@@ -66,7 +59,7 @@ pub struct Ticks {
 
     previous: Timestamp,
     pub tickrate: f64,
-    pub tick: u128
+    pub tick: u128,
 }
 
 #[reducer]
@@ -85,8 +78,7 @@ fn run_tick(ctx: &ReducerContext, mut arg: Ticks) -> Result<(), String> {
     mesher::proceed_mesher(ctx);
 
     // Process tasks
-    AsyncComputeTaskPool::get()
-        .with_local_executor(|executor| { executor.try_tick() });
+    AsyncComputeTaskPool::get().with_local_executor(|executor| executor.try_tick());
 
     ctx.db.ticks().id().update(arg);
     Ok(())
