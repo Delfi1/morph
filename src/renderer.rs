@@ -36,6 +36,15 @@ pub fn default_sampler() -> ImageSamplerDescriptor {
 
 pub struct Model;
 impl Model {
+    pub fn get_type(block: &Block) -> u32 {
+        match &block.model {
+            ModelType::Empty => 0,
+            ModelType::Cube(_) => 1,
+            ModelType::Stair(_) => 2,
+            ModelType::Slab(_) => 3,
+        }
+    }
+    
     pub fn load(block: &Block, assets: &AssetServer) -> Option<Handle<Image>> {
         match &block.model {
             ModelType::Cube(path) => {
@@ -47,13 +56,31 @@ impl Model {
 }
 
 #[derive(Resource)]
-pub struct TexturesHandler(pub Vec<Option<Handle<Image>>>);
-
-#[derive(Resource)]
-pub struct TexturesBindGroup(pub BindGroup);
+pub struct BlocksBindGroup {
+    pub textures_bind: BindGroup,
+    pub blocks_bind: BindGroup,
+}
 
 #[derive(Clone, Resource, ExtractResource, Default)]
-pub struct LoadBlocksHandler(pub HashMap<u16, Block>);
+/// Blocks data load handler
+pub struct LoadHandler(pub HashMap<u16, Block>);
+
+pub struct BlockData {
+    // Model type
+    model: u32,
+    texture: Option<Handle<Image>>
+}
+
+impl BlockData {
+    pub fn new(block: &Block, assets: &AssetServer) -> Self {
+        let model = Model::get_type(block);
+        let texture = Model::load(block, assets);
+        Self { model, texture }
+    }
+}
+
+#[derive(Resource)]
+pub struct BlocksHandler(pub Vec<BlockData>);
 
 #[derive(Clone, Component, ExtractComponent)]
 #[require(VisibilityClass)]
@@ -88,6 +115,7 @@ struct ChunksPipeline {
     camera_bind: BindGroup,
     chunk_layout: BindGroupLayout,
     textures_layout: BindGroupLayout,
+    blocks_layout: BindGroupLayout,
     sampler: Sampler
 }
 
@@ -170,16 +198,14 @@ fn prepare_pipeline(
     render_device: Res<RenderDevice>,
     loader: Option<Res<ChunkShaderLoader>>,
     pipeline: Option<Res<ChunksPipeline>>,
-    textures: Option<Res<TexturesHandler>>,
+    blocks: Option<Res<BlocksHandler>>,
     camera_uniforms: Res<ComponentUniforms<CameraUniform>>,
     assets: Res<AssetServer>,
 ) {
     let Some(loader) = loader else { return };
     if pipeline.is_some() { return; }
 
-    // Load textures
-    let Some(textures) = textures else { return };
-
+    let Some(blocks) = blocks else { return };
     let Some(camera_binding) = camera_uniforms.uniforms().binding() else { return };
 
     let camera_layout = render_device.create_bind_group_layout(
@@ -203,10 +229,18 @@ fn prepare_pipeline(
         &BindGroupLayoutEntries::sequential(
             ShaderStages::FRAGMENT,
             (
-                texture_2d(TextureSampleType::Float { filterable: false })
-                    .count(NonZero::<u32>::new(textures.0.len() as u32).unwrap()),
-                sampler(SamplerBindingType::NonFiltering),
+                texture_2d(TextureSampleType::Float { filterable: true })
+                    .count(NonZero::<u32>::new(blocks.0.len() as u32).unwrap()),
+                sampler(SamplerBindingType::Filtering),
             )
+        ),
+    );
+
+    let blocks_layout = render_device.create_bind_group_layout(
+        "blocks_layout",
+        &BindGroupLayoutEntries::single(
+            ShaderStages::VERTEX,
+            storage_buffer_read_only::<Vec<u32>>(false)
         ),
     );
 
@@ -219,7 +253,7 @@ fn prepare_pipeline(
     let sampler = render_device.create_sampler(&SamplerDescriptor {
         mag_filter: FilterMode::Nearest,
         min_filter: FilterMode::Nearest,
-        mipmap_filter: FilterMode::Nearest,
+        mipmap_filter: FilterMode::Linear,
         ..Default::default()
     });
 
@@ -229,8 +263,9 @@ fn prepare_pipeline(
         shader, 
         camera_layout, 
         camera_bind,
-        chunk_layout, 
-        textures_layout,
+        chunk_layout,
+        textures_layout, 
+        blocks_layout,
         sampler
     });
 
@@ -240,31 +275,32 @@ fn prepare_pipeline(
 fn prepare_textures(
     mut commands: Commands,
     assets: Res<AssetServer>,
-    blocks: Option<Res<LoadBlocksHandler>>,
-    textures: Option<Res<TexturesHandler>>,
+    load: Option<Res<LoadHandler>>,
+    handler: Option<Res<BlocksHandler>>,
 ) {
-    let Some(blocks) = blocks else { return };
-    if textures.is_some() { return };
+    let Some(load) = load else { return };
+    if handler.is_some() { return };
  
-    let l = blocks.0.len();
-    let mut textures = Vec::with_capacity(blocks.0.len());
+    let l = load.0.len();
+    let mut blocks = Vec::with_capacity(load.0.len());
 
     for i in 0..l as u16 {
-        let Some(block) = blocks.0.get(&i) else { return };
+        let Some(block) = load.0.get(&i) else { return };
 
-        textures.push(Model::load(block, &assets));
+        blocks.push(BlockData::new(block, &assets));
     }
     
-    commands.insert_resource(TexturesHandler(textures));
+    commands.insert_resource(BlocksHandler(blocks));
 }
 
 fn prepare_textures_bind(
     mut commands: Commands,
     fallback: Res<FallbackImage>,
+    render_queue: Res<RenderQueue>,
     render_device: Res<RenderDevice>,
-    bind: Option<Res<TexturesBindGroup>>,
+    bind: Option<Res<BlocksBindGroup>>,
     pipeline: Option<Res<ChunksPipeline>>,
-    handler: Option<Res<TexturesHandler>>,
+    handler: Option<Res<BlocksHandler>>,
     gpu_images: Res<RenderAssets<GpuImage>>,
 ) {
     let Some(pipeline) = pipeline else { return };
@@ -273,8 +309,8 @@ fn prepare_textures_bind(
 
     let mut images = Vec::with_capacity(handler.0.len());
 
-    for handle_opt in handler.0.iter() {
-        let Some(handle) = handle_opt else {
+    for data in handler.0.iter() {
+        let Some(handle) = data.texture.clone() else {
             images.push(None);
             continue;
         };
@@ -285,28 +321,38 @@ fn prepare_textures_bind(
         }
     }
 
-    let fallback_image = &fallback.d2;
-    let textures = vec![&fallback_image.texture_view; images.len()];
-    let mut textures: Vec<_> = textures.into_iter().map(|texture| &**texture).collect();
+    // Create blocks data
+    let data: Vec<u32> = handler.0.iter().map(|b| b.model).collect();
+    let mut buffer = StorageBuffer::from(data);
+    buffer.write_buffer(&render_device, &render_queue);
+
+    let views = vec![&fallback.d2.texture_view; images.len()];
+    let mut textures: Vec<_> = views.into_iter().map(|texture| &**texture).collect();
     for (id, image_opt) in images.into_iter().enumerate() {
         if let Some(image) = image_opt {
             textures[id] = &*image.texture_view;
         }
     }
 
-    let bind_group = render_device.create_bind_group(
+    let textures_bind = render_device.create_bind_group(
         "textures_bind_group",
         &pipeline.textures_layout,
         &BindGroupEntries::sequential((&textures[..], &pipeline.sampler)),
     );
 
-    commands.insert_resource(TexturesBindGroup(bind_group));
+    let blocks_bind = render_device.create_bind_group(
+        "blocks_bind_group",
+        &pipeline.blocks_layout,
+        &BindGroupEntries::single(buffer.binding().unwrap()),
+    );
+
+    commands.insert_resource(BlocksBindGroup { textures_bind, blocks_bind });
 }
 
 fn queue_chunks(
     pipeline_cache: Res<PipelineCache>,
     pipeline: Option<Res<ChunksPipeline>>,
-    textures: Option<Res<TexturesBindGroup>>,
+    textures: Option<Res<BlocksBindGroup>>,
     mut opaque_render_phases: ResMut<ViewBinnedRenderPhases<Opaque3d>>,
     opaque_draw_functions: Res<DrawFunctions<Opaque3d>>,
     render_pipelines: Option<ResMut<SpecializedRenderPipelines<ChunksPipeline>>>,
@@ -366,7 +412,7 @@ impl Plugin for RenderingPlugin {
         app.add_plugins(ExtractComponentPlugin::<ChunkMesh>::default())
             .add_plugins(UniformComponentPlugin::<CameraUniform>::default())
             .add_plugins(ExtractResourcePlugin::<ChunkShaderLoader>::default())
-            .add_plugins(ExtractResourcePlugin::<LoadBlocksHandler>::default());
+            .add_plugins(ExtractResourcePlugin::<LoadHandler>::default());
 
         app.get_sub_app_mut(RenderApp)
             .unwrap()
@@ -394,7 +440,7 @@ impl SpecializedRenderPipeline for ChunksPipeline {
     fn specialize(&self, msaa: Self::Key) -> RenderPipelineDescriptor {
         RenderPipelineDescriptor {
             label: Some("chunk render pipeline".into()),
-            layout: vec![self.camera_layout.clone(), self.textures_layout.clone(), self.chunk_layout.clone()],
+            layout: vec![self.camera_layout.clone(), self.textures_layout.clone(), self.blocks_layout.clone(), self.chunk_layout.clone()],
             push_constant_ranges: vec![],
             vertex: VertexState {
                 shader: self.shader.clone(),
@@ -444,7 +490,7 @@ struct BindChunk;
 impl<P: PhaseItem> RenderCommand<P> for BindChunk {
     type Param = (
         Res<'static, ChunksPipeline>,
-        Res<'static, TexturesBindGroup>,
+        Res<'static, BlocksBindGroup>,
     );
 
     type ViewQuery = (
@@ -458,11 +504,11 @@ impl<P: PhaseItem> RenderCommand<P> for BindChunk {
         _: &P,
         (_, camera_index): bevy::ecs::query::ROQueryItem<'w, Self::ViewQuery>,
         _: Option<bevy::ecs::query::ROQueryItem<'w, Self::ItemQuery>>,
-        (pipeline, textures): bevy::ecs::system::SystemParamItem<'w, '_, Self::Param>,
+        (pipeline, blocks): bevy::ecs::system::SystemParamItem<'w, '_, Self::Param>,
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
         let pipeline = pipeline.into_inner();
-        let textures = textures.into_inner();
+        let blocks = blocks.into_inner();
 
         pass.set_bind_group(
             0,
@@ -472,7 +518,13 @@ impl<P: PhaseItem> RenderCommand<P> for BindChunk {
 
         pass.set_bind_group(
             1,
-            &textures.0,
+            &blocks.textures_bind,
+            &[]
+        );
+
+        pass.set_bind_group(
+            2,
+            &blocks.blocks_bind,
             &[]
         );
 
@@ -503,7 +555,7 @@ impl<P: PhaseItem> RenderCommand<P> for DrawChunk {
         let buffers = buffers.into_inner();
 
         pass.set_bind_group(
-            2,
+            3,
             &buffers.bind,
             &[]
         );

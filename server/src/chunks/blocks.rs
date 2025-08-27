@@ -36,15 +36,6 @@ pub enum ModelType {
 }
 
 impl ModelType {
-    pub fn get(&self) -> u32 {
-        match self {
-            Self::Empty => 0,
-            Self::Cube(_) => 1,
-            Self::Stair(_) => 2,
-            Self::Slab(_) => 3,
-        }
-    }
-
     pub fn is_meshable(&self) -> bool {
         match self {
             Self::Cube(_) => true,

@@ -168,7 +168,7 @@ impl Vertex {
     /// [1]bit - UVx (0/1)
     /// [1]bit - UVy (0/1)
     /// [2]birs - block type (0-3)
-    /// [7]bits - block id (also texture id) (0-127)
+    /// [9]bits - block id (also texture id) (0-511)
     pub fn new(local: IVec3, dir: Direction, block: &Block, uv: &UVec2) -> u32 {
         let data = local.x as u32
         | (local.y as u32) << 6u32
@@ -176,8 +176,7 @@ impl Vertex {
         | (dir.to_u32()) << 18u32
         | (uv.x) << 21u32
         | (uv.y) << 22u32
-        | (block.model.get()) << 23u32
-        | (block.id as u32) << 25u32;
+        | (block.id as u32) << 23u32;
         
         data
     }

@@ -147,7 +147,7 @@ fn on_block_inserted(
         blocks.insert(block.id, block);
     }
 
-    commands.insert_resource(renderer::LoadBlocksHandler(blocks));
+    commands.insert_resource(renderer::LoadHandler(blocks));
 }
 
 fn on_player_inserted(

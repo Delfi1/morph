@@ -15,7 +15,10 @@ struct ChunkUniform {
 @group(1) @binding(0) var textures: binding_array<texture_2d<f32>>;
 @group(1) @binding(1) var nearest_sampler: sampler;
 
-@group(2) @binding(0) var<uniform> chunk: ChunkUniform;
+/// Block model types by block id
+@group(2) @binding(0) var<storage, read> blocks: array<u32>;
+
+@group(3) @binding(0) var<uniform> chunk: ChunkUniform;
 
 
 // Packed voxel data
@@ -30,12 +33,11 @@ fn x_bits(bits: u32) -> u32{
 
 struct VertexOutput {
     @builtin(position) position: vec4<f32>,
-    @location(0) normal: vec3<f32>,
-    // Uv coords in texture
-    @location(1) uv: vec2<f32>, 
     // block id (or model uniform id)
-    @location(2) block: u32,
-    @location(3) side: u32,
+    @location(0) block: u32,
+    @location(1) side: u32,
+    // Uv coords in texture
+    @location(2) uv: vec2<f32>, 
 }
 
 var<private> light: vec3<f32> = vec3<f32>(0.0, 0.0, 0.0);
@@ -52,18 +54,20 @@ var<private> normals: array<vec3<f32>, 6> = array<vec3<f32>,6> (
 // Cube model uv map
 // Uv map (x0; y0; x1; y1)
 var<private> cube: array<vec4<f32>, 6> = array<vec4<f32>, 6>(
-    vec4<f32>(0.625, 1.0, 0.375, 0.75),  // Up
-    vec4<f32>(0.625, 0.0, 0.875, 0.25),  // Left
-    vec4<f32>(0.125, 0.0, 0.375, 0.25),  // Right
-    vec4<f32>(0.625, 0.0, 0.375, 0.25),  // Forward
-    vec4<f32>(0.625, 0.75, 0.375, 0.5),  // Back
-    vec4<f32>(0.625, 0.5, 0.375, 0.25),  // Down
+    vec4<f32>(0.0, 0.0, 0.1666, 1.0),   // Up
+    vec4<f32>(0.1666, 0.0, 0.333, 1.0), // Left
+    vec4<f32>(0.333, 0.0, 0.5, 1.0),    // Right
+    vec4<f32>(0.5, 0.0, 0.666, 1.0),    // Forward
+    vec4<f32>(0.666, 0.0, 0.8333, 1.0), // Back
+    vec4<f32>(0.8333, 0.0, 1.0, 1.0),   // Down
 );
 
 // Get uv from block type, side and uv(xy) 
-fn get_uv(block_type: u32, side: u32, x: u32, y: u32) -> vec2<f32> {
-    let idx = x * 2u;
-    let idy = y * 2u + 1u;
+fn get_uv(block_type: u32, side: u32, uvx: u32, uvy: u32) -> vec2<f32> {
+    // if block_type is 1u -> cube; 2u -> slab; 3u -> stairs;
+
+    let idx = uvx * 2u;
+    let idy = uvy * 2u + 1u;
 
     return vec2<f32>(cube[side][idx], cube[side][idy]);
 }
@@ -83,23 +87,22 @@ fn vertex(vertex: Vertex) -> VertexOutput {
     let uvx = (vertex.data >> 21u) & x_bits(1u);
     let uvy = (vertex.data >> 22u) & x_bits(1u);
 
-    // Block type
-    let block_type = (vertex.data >> 23u) & x_bits(2u);
-
     // Block id (also model and texture id)
-    let block = (vertex.data >> 25u) & x_bits(7u);
+    let block = (vertex.data >> 23u) & x_bits(9u);
+    let block_type = blocks[block];
 
     out.position = camera.clip_from_view * camera.view_from_world * chunk.transform * vec4<f32>(x, y, z, 1.0);
-    out.normal = normals[side];
-    out.uv = get_uv(block_type, side, uvx, uvy);
     out.block = block;
     out.side = side;
+    out.uv = get_uv(block_type, side, uvx, uvy);
     
     return out;
 }
 
 @fragment
 fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
+    //let block_type = blocks[in.block];
+    let normal = normals[in.side];
     let color: vec4<f32> = textureSample(textures[in.block], nearest_sampler, in.uv);
 
     // todo: add direction light
