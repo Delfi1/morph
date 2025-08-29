@@ -35,7 +35,7 @@ pub struct CameraPlugin;
 
 impl Plugin for CameraPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Last, 
+        app.add_systems(PostUpdate, 
             camera_control
                 .run_if(any_with_component::<PrimaryWindow>)
                 .run_if(any_with_component::<MainCamera>)

@@ -12,20 +12,21 @@ pub mod block_type;
 pub mod chunk_table;
 pub mod chunk_type;
 pub mod create_player_reducer;
-pub mod identity_connected_reducer;
-pub mod identity_disconnected_reducer;
 pub mod join_reducer;
 pub mod mesh_table;
 pub mod mesh_type;
 pub mod model_type_type;
 pub mod player_table;
 pub mod player_type;
+pub mod proceed_tasks_reducer;
 pub mod run_tick_reducer;
 pub mod scanner_table;
 pub mod scanner_type;
 pub mod st_asset_type;
 pub mod st_i_vec_3_type;
 pub mod st_vec_3_type;
+pub mod tasks_schedule_type;
+pub mod tasks_table;
 pub mod ticks_table;
 pub mod ticks_type;
 
@@ -37,24 +38,23 @@ pub use chunk_type::Chunk;
 pub use create_player_reducer::{
     create_player, set_flags_for_create_player, CreatePlayerCallbackId,
 };
-pub use identity_connected_reducer::{
-    identity_connected, set_flags_for_identity_connected, IdentityConnectedCallbackId,
-};
-pub use identity_disconnected_reducer::{
-    identity_disconnected, set_flags_for_identity_disconnected, IdentityDisconnectedCallbackId,
-};
 pub use join_reducer::{join, set_flags_for_join, JoinCallbackId};
 pub use mesh_table::*;
 pub use mesh_type::Mesh;
 pub use model_type_type::ModelType;
 pub use player_table::*;
 pub use player_type::Player;
+pub use proceed_tasks_reducer::{
+    proceed_tasks, set_flags_for_proceed_tasks, ProceedTasksCallbackId,
+};
 pub use run_tick_reducer::{run_tick, set_flags_for_run_tick, RunTickCallbackId};
 pub use scanner_table::*;
 pub use scanner_type::Scanner;
 pub use st_asset_type::StAsset;
 pub use st_i_vec_3_type::StIVec3;
 pub use st_vec_3_type::StVec3;
+pub use tasks_schedule_type::TasksSchedule;
+pub use tasks_table::*;
 pub use ticks_table::*;
 pub use ticks_type::Ticks;
 
@@ -67,9 +67,8 @@ pub use ticks_type::Ticks;
 
 pub enum Reducer {
     CreatePlayer { name: String },
-    IdentityConnected,
-    IdentityDisconnected,
     Join,
+    ProceedTasks { arg: TasksSchedule },
     RunTick { arg: Ticks },
 }
 
@@ -81,9 +80,8 @@ impl __sdk::Reducer for Reducer {
     fn reducer_name(&self) -> &'static str {
         match self {
             Reducer::CreatePlayer { .. } => "create_player",
-            Reducer::IdentityConnected => "identity_connected",
-            Reducer::IdentityDisconnected => "identity_disconnected",
             Reducer::Join => "join",
+            Reducer::ProceedTasks { .. } => "proceed_tasks",
             Reducer::RunTick { .. } => "run_tick",
         }
     }
@@ -96,17 +94,13 @@ impl TryFrom<__ws::ReducerCallInfo<__ws::BsatnFormat>> for Reducer {
                 create_player_reducer::CreatePlayerArgs,
             >("create_player", &value.args)?
             .into()),
-            "identity_connected" => Ok(__sdk::parse_reducer_args::<
-                identity_connected_reducer::IdentityConnectedArgs,
-            >("identity_connected", &value.args)?
-            .into()),
-            "identity_disconnected" => Ok(__sdk::parse_reducer_args::<
-                identity_disconnected_reducer::IdentityDisconnectedArgs,
-            >("identity_disconnected", &value.args)?
-            .into()),
             "join" => Ok(
                 __sdk::parse_reducer_args::<join_reducer::JoinArgs>("join", &value.args)?.into(),
             ),
+            "proceed_tasks" => Ok(__sdk::parse_reducer_args::<
+                proceed_tasks_reducer::ProceedTasksArgs,
+            >("proceed_tasks", &value.args)?
+            .into()),
             "run_tick" => Ok(__sdk::parse_reducer_args::<run_tick_reducer::RunTickArgs>(
                 "run_tick",
                 &value.args,
@@ -132,6 +126,7 @@ pub struct DbUpdate {
     mesh: __sdk::TableUpdate<Mesh>,
     player: __sdk::TableUpdate<Player>,
     scanner: __sdk::TableUpdate<Scanner>,
+    tasks: __sdk::TableUpdate<TasksSchedule>,
     ticks: __sdk::TableUpdate<Ticks>,
 }
 
@@ -159,6 +154,9 @@ impl TryFrom<__ws::DatabaseUpdate<__ws::BsatnFormat>> for DbUpdate {
                 "scanner" => db_update
                     .scanner
                     .append(scanner_table::parse_table_update(table_update)?),
+                "tasks" => db_update
+                    .tasks
+                    .append(tasks_table::parse_table_update(table_update)?),
                 "ticks" => db_update
                     .ticks
                     .append(ticks_table::parse_table_update(table_update)?),
@@ -206,6 +204,9 @@ impl __sdk::DbUpdate for DbUpdate {
         diff.scanner = cache
             .apply_diff_to_table::<Scanner>("scanner", &self.scanner)
             .with_updates_by_pk(|row| &row.identity);
+        diff.tasks = cache
+            .apply_diff_to_table::<TasksSchedule>("tasks", &self.tasks)
+            .with_updates_by_pk(|row| &row.scheduled_id);
         diff.ticks = cache
             .apply_diff_to_table::<Ticks>("ticks", &self.ticks)
             .with_updates_by_pk(|row| &row.id);
@@ -224,6 +225,7 @@ pub struct AppliedDiff<'r> {
     mesh: __sdk::TableAppliedDiff<'r, Mesh>,
     player: __sdk::TableAppliedDiff<'r, Player>,
     scanner: __sdk::TableAppliedDiff<'r, Scanner>,
+    tasks: __sdk::TableAppliedDiff<'r, TasksSchedule>,
     ticks: __sdk::TableAppliedDiff<'r, Ticks>,
 }
 
@@ -243,6 +245,7 @@ impl<'r> __sdk::AppliedDiff<'r> for AppliedDiff<'r> {
         callbacks.invoke_table_row_callbacks::<Mesh>("mesh", &self.mesh, event);
         callbacks.invoke_table_row_callbacks::<Player>("player", &self.player, event);
         callbacks.invoke_table_row_callbacks::<Scanner>("scanner", &self.scanner, event);
+        callbacks.invoke_table_row_callbacks::<TasksSchedule>("tasks", &self.tasks, event);
         callbacks.invoke_table_row_callbacks::<Ticks>("ticks", &self.ticks, event);
     }
 }
@@ -825,6 +828,7 @@ impl __sdk::SpacetimeModule for RemoteModule {
         mesh_table::register_table(client_cache);
         player_table::register_table(client_cache);
         scanner_table::register_table(client_cache);
+        tasks_table::register_table(client_cache);
         ticks_table::register_table(client_cache);
     }
 }

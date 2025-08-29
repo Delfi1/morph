@@ -468,7 +468,10 @@ impl SpecializedRenderPipeline for ChunksPipeline {
                     write_mask: ColorWrites::ALL,
                 })],
             }),
-            primitive: PrimitiveState::default(),
+            primitive: PrimitiveState {
+                cull_mode: Some(Face::Back),
+                ..default()
+            },
             depth_stencil: Some(DepthStencilState {
                 format: CORE_3D_DEPTH_FORMAT,
                 depth_write_enabled: true,

@@ -230,8 +230,8 @@ fn on_mesh_inserted(
         let id = commands.spawn((
             Visibility::default(),
             Aabb::from_min_max(
-                Vec3::splat(-SIZE_F32 / 2.0),
-                Vec3::splat(SIZE_F32 * 1.5),
+                Vec3::splat(-SIZE_F32),
+                Vec3::splat(SIZE_F32 * 2.0),
             ),
             renderer::ChunkMesh::new(global, vertices, indices),
             Transform::from_translation(global)

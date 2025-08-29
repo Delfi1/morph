@@ -13,7 +13,7 @@ use super::st_i_vec_3_type::StIVec3;
 pub struct Chunk {
     pub id: u64,
     pub position: StIVec3,
-    pub blocks: Vec<u16>,
+    pub data: Vec<u8>,
 }
 
 impl __sdk::InModule for Chunk {
