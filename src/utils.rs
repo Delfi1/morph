@@ -1,4 +1,4 @@
-pub const SIZE: usize = 32;
+pub const SIZE: usize = 16;
 pub const SIZE_F32: f32 = SIZE as f32;
 
 use super::stdb;
