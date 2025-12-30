@@ -1,0 +1,14 @@
+[package]
+name = "morph"
+version = "0.0.1"
+edition = "2024"
+
+[workspace]
+resolver = "3"
+members = ["server", "shared"]
+
+[profile.release]
+codegen-units = 1
+lto = "thin"
+
+[dependencies]

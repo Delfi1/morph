@@ -1,0 +1,10 @@
+[package]
+name = "shared"
+version = "0.0.1"
+edition = "2024"
+
+[dependencies]
+rune = "0.14.0"
+bevy_math = "*"
+bevy_tasks = "*"
+log = "0.4"
