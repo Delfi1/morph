@@ -1,7 +1,7 @@
 pub(super) use crate::math::*;
 
 /// Bevy IVec3's representation in Rune
-#[derive(rune::Any, Clone)]
+#[derive(rune::Any, Clone, Copy)]
 pub struct RnIVec3(pub IVec3);
 
 impl RnIVec3 {

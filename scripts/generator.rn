@@ -1,0 +1,18 @@
+
+
+// Gen ticker!
+// 1. Is idle?
+// 2. Request position in queue 
+// 3. Create chunk buffer 
+// 4. Generate chunk!
+
+fn tick() {
+    let pos = request_gen();
+    if pos.is_none() {
+        return;
+    }
+
+    let chunk = new_chunk();
+
+    
+}

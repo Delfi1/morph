@@ -1,5 +1,4 @@
-use super::{Chunk, get_chunk, RawChunk, SIZE, SIZE_I32, math::*};
-use std::sync::*;
+use super::math::*;
 
 #[derive(rune::Any, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Direction {

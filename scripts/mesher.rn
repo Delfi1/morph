@@ -1,10 +1,20 @@
-fn test(value) {
-    
-}
+
+// Mesher ticker!
+// 1. Is idle?
+// 2. Request position in queue 
+// 3. Request chunks refs
+// 4. Is generated? if not - return pos to queue
+// 5. Create chunk buffer 
+// 6. Generate chunk!
 
 // Main mesher realisation
-fn mesher() {
-    // Create mesh buffer
-    let result = Mesh
+fn tick() {
+    let pos = request_mesh();
+    if pos.is_none() {
+        return;
+    }
 
+    let mesh = Mesh::new();
+
+    
 }

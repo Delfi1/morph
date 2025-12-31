@@ -112,7 +112,7 @@ impl ChunksRefs {
     pub fn new(pos: IVec3) -> Option<Self> {
         let mut data = Vec::with_capacity(7);
         for n in 0..7 {
-            data.push(super::get_chunk(pos + ChunksRefs::OFFSETS[n])?)
+            data.push(super::_get_chunk(pos + ChunksRefs::OFFSETS[n])?)
         }
 
         Some(Self(Self::to_array(data)))
@@ -149,8 +149,13 @@ impl ChunksRefs {
 // Chunks functions
 
 #[rune::function]
+pub fn new_chunk() -> Chunk {
+    Chunk::empty()
+}
+
+#[rune::function]
 pub fn get_block(chunk: &RnIVec3, block: &RnIVec3) -> u16 {
-    let chunk = super::get_chunk(chunk.0).unwrap();
+    let chunk = super::_get_chunk(chunk.0).unwrap();
     let data = chunk.read();
 
     data.get_block(RawChunk::block_index(block.0))
@@ -158,7 +163,7 @@ pub fn get_block(chunk: &RnIVec3, block: &RnIVec3) -> u16 {
 
 #[rune::function]
 pub fn set_block(chunk: &RnIVec3, block: &RnIVec3, value: u16) {
-    let chunk = super::get_chunk(chunk.0).unwrap();
+    let chunk = super::_get_chunk(chunk.0).unwrap();
     let mut data = chunk.write();
 
     data.set_block(RawChunk::block_index(block.0), value)
