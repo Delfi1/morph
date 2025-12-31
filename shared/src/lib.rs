@@ -37,27 +37,40 @@ struct Scripts {
     units: RwLock<HashMap<ScriptType, Arc<rune::Unit>>>,
 }
 
+/// Create scripts context and install main Morph module
 fn init_scripts() -> rune::support::Result<()> {
-    let context = rune::Context::new();
+    let mut context = rune::Context::with_default_modules()?;
+    module(&mut context)?;
+
     let runtime = Arc::new(context.runtime()?);
     let units = RwLock::new(HashMap::new());
 
     let _ = SCRIPTS.set(Scripts { context, runtime, units });
+    Ok(())
+}
+
+/// Insert new script by type
+pub fn insert_script(raw: String, script_type: ScriptType) -> rune::support::Result<()> {
+    let scripts = SCRIPTS.get().unwrap();
+
+    let mut sources = rune::Sources::new();
+    sources.insert(rune::Source::memory(raw)?)?;
+
+    let unit = rune::prepare(&mut sources)
+        .with_context(&scripts.context)
+        .build()?;
+
+    let unit = Arc::new(unit);
+
+    let mut guard = scripts.units.write().unwrap();
+    guard.insert(script_type, unit);
 
     Ok(())
 }
 
-pub fn add_ticker(id: u32, unit: Arc<rune::Unit>) {
-    let value = SCRIPTS.get().unwrap();
-    let mut guard = value.units.write().unwrap();
-
-    guard.insert(ScriptType::Ticker(id), unit);
-}
-
 /// Init Rune command
 pub async fn build_mesh_task(unit: Arc<rune::Unit>, pos: IVec3) -> Option<Mesh> {
-    let scripts = SCRIPTS.get().unwrap();
-    let runtime = scripts.runtime.clone();
+    let runtime = SCRIPTS.get().unwrap().runtime.clone();
     let mut vm = rune::Vm::new(runtime, unit);
 
     let output = vm.call(["mesher"], (RnIVec3(pos), )).ok()?;
@@ -66,15 +79,33 @@ pub async fn build_mesh_task(unit: Arc<rune::Unit>, pos: IVec3) -> Option<Mesh> 
     result
 }
 
+pub async fn generate_chunk_task(unit: Arc<rune::Unit>, pos: IVec3) -> Chunk {
+    let runtime = SCRIPTS.get().unwrap().runtime.clone();
+    let mut vm = rune::Vm::new(runtime, unit);
+
+    let output = vm.call(["mesher"], (RnIVec3(pos), )).unwrap();
+    let result: Chunk = rune::from_value(output).unwrap();
+    
+    result
+}
+
 /// Run worldgen script as `bevy` Task
 pub fn proceed_worldgen(pos: IVec3) {
+    let value = VALUE.get().unwrap();
     let scripts = SCRIPTS.get().unwrap();
+    
     let guard = scripts.units.read().unwrap();
-
-    let Some(generator) = guard.get(&ScriptType::Generator) else {
+    let Some(generator) = guard.get(&ScriptType::Generator).cloned() else {
         log::error!("Generator script is not initialized");
         return;
     };
+
+    // Create tasks hashmap guard
+    let mut guard = value.gtasks.lock().unwrap();
+    let taskpool = tasks::AsyncComputeTaskPool::get();
+    let task = taskpool.spawn(generate_chunk_task(generator, pos));
+    
+    guard.insert(pos, task);
 }
 
 /// Run mesher script as `bevy` Task
@@ -110,7 +141,7 @@ pub struct Core {
 
 /// Init main shared components and core data
 pub fn init() {
-    tasks::ComputeTaskPool::get_or_init(|| TaskPool::new());
+    tasks::AsyncComputeTaskPool::get_or_init(|| TaskPool::new());
 
     init_scripts().unwrap();
 
@@ -137,39 +168,16 @@ pub fn add_chunk(pos: IVec3, chunk: Chunk) {
     guard.insert(pos, chunk);
 }
 
-/// Bevy IVec3's representation in Rune
-#[derive(rune::Any, Clone)]
-pub struct RnIVec3(IVec3);
+/// Proceed Compute task pool tasks
+pub fn proceed_tasks() {
+    let taskpool = tasks::AsyncComputeTaskPool::get();
 
-impl RnIVec3 {
-    pub fn new(position: IVec3) -> Self {
-        Self(position)
-    }
+    taskpool.with_local_executor(|ex| ex.try_tick());
 }
 
 #[rune::function]
-pub fn ivec3(x: i32, y: i32, z: i32) -> RnIVec3 {
-    RnIVec3(IVec3::new(x, y, z))
-}
-
-#[rune::function]
-pub fn get_block(chunk: &RnIVec3, block: &RnIVec3) -> u16 {
-    let chunk = get_chunk(chunk.0).unwrap();
-    let data = chunk.read();
-
-    data.get_block(RawChunk::block_index(block.0))
-}
-
-#[rune::function]
-/// Get chunk refs data
-pub fn get_refs(pos: RnIVec3) -> Option<ChunksRefs> {
-    ChunksRefs::new(pos.0)
-}
-
-/// Get chunk refs block
-#[rune::function(instance)]
-pub fn refs_block(refs: &ChunksRefs, pos: RnIVec3) -> u16 {
-    refs.get_block(pos.0)
+pub fn debug(value: rune::Value) {
+    log::debug!("{:?}", value);
 }
 
 /// Setup module
@@ -182,15 +190,18 @@ pub fn module(context: &mut rune::Context) -> rune::support::Result<()> {
     m.type_meta::<Mesh>()?;
 
     // Helpful functions
-    m.function_meta(ivec3)?;
+    m.function_meta(chunk::ivec3)?;
+    m.function_meta(debug)?;
 
     // Chunks functions
     m.function_meta(get_block)?;
+    m.function_meta(set_block)?;
     m.function_meta(get_refs)?;
     m.function_meta(refs_block)?;
 
     // Meshes
     m.function_meta(new_mesh)?;
+    m.function_meta(push_vertex)?;
     m.function_meta(finish_mesh)?;
 
     context.install(m)?;

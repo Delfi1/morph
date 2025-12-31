@@ -1,9 +1,5 @@
-fn foo(condition) {
-    if condition {
-        "Hello"
-    } else {
-        1
-    }
+fn test(value) {
+    
 }
 
 // Main mesher realisation
