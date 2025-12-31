@@ -11,6 +11,7 @@ pub use bevy_tasks as tasks;
 pub use rune;
 
 // Exports
+pub mod assets;
 pub mod chunk;
 pub mod mesh;
 

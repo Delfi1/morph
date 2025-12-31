@@ -1,4 +1,11 @@
+mod assets;
+
 use spacetimedb::{Identity, ReducerContext, ScheduleAt, Table, TimeDuration};
+
+// Once second in micros
+const DURATION: i64 = 1_000_000;
+const TPS: i64 = 40;
+const TICK: i64 = DURATION / TPS;
 
 #[spacetimedb::table(name = player)]
 pub struct Player {
@@ -22,11 +29,6 @@ pub struct ChunkData {
     /// Raw chunk's data
     data: Vec<u8>
 }
-
-// Once second in micros
-const DURATION: i64 = 1_000_000;
-const TPS: i64 = 40;
-const TICK: i64 = DURATION / TPS;
 
 /// Setup core values and tables
 fn setup(_ctx: &ReducerContext) {
