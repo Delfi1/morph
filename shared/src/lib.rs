@@ -50,8 +50,14 @@ fn init_scripts() -> rune::support::Result<()> {
     Ok(())
 }
 
+pub fn clear_scripts() {
+    let scripts = SCRIPTS.get().unwrap();
+    let mut guard = scripts.units.write().unwrap();
+    guard.clear();
+}
+
 /// Insert new script by type
-pub fn insert_script(raw: impl AsRef<str>, id: u32) -> rune::support::Result<()> {
+pub fn insert_script(id: u32, raw: impl AsRef<str>) -> rune::support::Result<()> {
     let scripts = SCRIPTS.get().unwrap();
 
     let mut sources = rune::Sources::new();

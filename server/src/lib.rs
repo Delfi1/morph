@@ -31,11 +31,11 @@ pub struct ChunkData {
 }
 
 /// Setup core values and tables
-fn setup(_ctx: &ReducerContext) {
+fn setup(ctx: &ReducerContext) {
     shared::init();
+    assets::init(ctx);
 
-    // Test scripts
-    shared::insert_script("pub fn tick() { debug(\"TEST\"); }", 0).expect("Script insert error");
+    assets::load_scripts(ctx);
 }
 
 #[spacetimedb::reducer(init)]

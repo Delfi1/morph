@@ -1,20 +1,20 @@
-use std::{collections::*, path::Path};
+use std::collections::*;
 use spacetimedb::{ReducerContext, Table};
 
 #[spacetimedb::table(name=assets)]
 pub struct AssetFile {
     #[primary_key]
-    path: String,
-    value: Vec<u8>
+    pub path: String,
+    pub value: Vec<u8>
 }
 
 #[spacetimedb::table(name=scripts)]
 pub struct ScriptAsset {
     #[primary_key]
-    asset_path: String
+    pub asset_path: String
 }
 
-pub fn load_assets(ctx: &ReducerContext) {
+pub fn init(ctx: &ReducerContext) {
     let old_keys = ctx.db.assets().iter()
         .map(|s| s.path).collect::<HashSet<String>>();
 
@@ -35,9 +35,23 @@ pub fn load_assets(ctx: &ReducerContext) {
         let asset_path = ctx.db.assets()
             .insert(AssetFile { path, value }).path;
 
-        // Is script?
+        // Is scripts?
         if asset_path.ends_with(".rn") {
             ctx.db.scripts().insert(ScriptAsset { asset_path });
+        }
+    }
+}
+
+pub fn load_scripts(ctx: &ReducerContext) {
+    shared::clear_scripts();
+    let scripts: Vec<ScriptAsset> = ctx.db.scripts().iter().collect();
+
+    for i in 0..scripts.len() {
+        let assets = ctx.db.assets().path().find(&scripts[i].asset_path).unwrap();
+        let data = String::from_utf8(assets.value).unwrap();
+
+        if let Err(e) = shared::insert_script(i as u32, data) {
+            log::error!("Script insertion error: {}", e);
         }
     }
 }
