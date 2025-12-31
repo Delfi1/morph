@@ -1,1 +1,14 @@
+fn foo(condition) {
+    if condition {
+        "Hello"
+    } else {
+        1
+    }
+}
+
 // Main mesher realisation
+fn mesher() {
+    // Create mesh buffer
+    let result = Mesh
+
+}

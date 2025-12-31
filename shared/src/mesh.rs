@@ -1,7 +1,7 @@
-use super::{Chunk, Core, RawChunk, SIZE, SIZE_I32, math::*};
+use super::{Chunk, get_chunk, RawChunk, SIZE, SIZE_I32, math::*};
 use std::sync::*;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(rune::Any, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Direction {
     Left,
     Right,
@@ -10,14 +10,6 @@ pub enum Direction {
     Back,
     Forward,
 }
-
-pub struct Mesh {
-    vertices: Vec<u32>,
-    indices: Vec<u32>,
-}
-
-/// Init Rune command
-pub async fn build(refs: ChunksRefs) {}
 
 #[repr(transparent)]
 #[derive(rune::Any)]
@@ -45,7 +37,7 @@ impl ChunksRefs {
     pub fn new(pos: IVec3) -> Option<Self> {
         let mut data = Vec::with_capacity(7);
         for n in 0..7 {
-            data.push(Core::get_chunk(pos + ChunksRefs::OFFSETS[n])?)
+            data.push(get_chunk(pos + ChunksRefs::OFFSETS[n])?)
         }
 
         Some(Self(Self::to_array(data)))
@@ -77,3 +69,28 @@ impl ChunksRefs {
         RawChunk::get_block(&self.0[chunk].read(), block)
     }
 }
+
+#[derive(rune::Any, Debug, Clone)]
+pub struct Mesh {
+    vertices: Vec<u32>,
+    indices: Vec<u32>,
+}
+
+/// Create new mesh buffer
+#[rune::function]
+pub fn new_mesh() -> Mesh {
+    Mesh {
+        vertices: Vec::with_capacity(256),
+        indices: Vec::new()
+    }
+}
+
+pub fn push_vertex(mesh: &mut Mesh, vertex: u32) {
+    mesh.vertices.push(vertex);
+}
+
+#[rune::function(instance)]
+pub fn finish_mesh(mesh: &mut Mesh) {
+    mesh.indices = Vec::new();
+}
+

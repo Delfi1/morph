@@ -9,5 +9,7 @@ pub struct Player {
 
 #[spacetimedb::reducer(init)]
 fn init(_ctx: &ReducerContext) {
+    shared::init();
 
+    
 }
