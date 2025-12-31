@@ -6,5 +6,5 @@ edition = "2024"
 [dependencies]
 rune = "0.14.0"
 bevy_math = "*"
-#bevy_tasks = "*"
+bevy_tasks = "*"
 log = "0.4"

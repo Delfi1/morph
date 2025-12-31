@@ -31,7 +31,6 @@ pub fn push_vertex(mesh: &mut Mesh, vertex: u32) {
 }
 
 #[rune::function(instance)]
-pub fn finish_mesh(mesh: &mut Mesh) {
-    mesh.indices = Vec::new();
+pub fn push_index(mesh: &mut Mesh, index: u32) {
+    mesh.indices.push(index);
 }
-

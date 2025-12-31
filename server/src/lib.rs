@@ -28,9 +28,17 @@ const DURATION: i64 = 1_000_000;
 const TPS: i64 = 40;
 const TICK: i64 = DURATION / TPS;
 
+/// Setup core values and tables
+fn setup(_ctx: &ReducerContext) {
+    shared::init();
+
+    // Test scripts
+    shared::insert_script("pub fn tick() { debug(\"TEST\"); }", 0).expect("Script insert error");
+}
+
 #[spacetimedb::reducer(init)]
 fn init(ctx: &ReducerContext) {
-    shared::init();
+    setup(ctx);
 
     let _ = ctx.db.ticker().try_insert(Ticker {
         scheduled_id: 0,
@@ -46,12 +54,9 @@ struct Ticker {
 }
 
 #[spacetimedb::reducer]
-fn tick(_ctx: &ReducerContext, _arg: Ticker) {
+fn tick(ctx: &ReducerContext, _arg: Ticker) {
     if !shared::is_initalized() {
-        shared::init();
-
-        // Test scripts
-        shared::insert_script("pub fn tick() { debug('TEST'); }", 0).expect("Script insert error");
+        setup(ctx);
     }
 
     shared::tick_scripts().expect("Tick error");

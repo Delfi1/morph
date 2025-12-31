@@ -7,6 +7,7 @@ use std::{collections::*, sync::*};
 
 // Re-exports
 pub use bevy_math as math;
+pub use bevy_tasks as tasks;
 pub use rune;
 
 // Exports
@@ -14,6 +15,7 @@ pub mod chunk;
 pub mod mesh;
 
 use math::*;
+use tasks::*;
 
 use chunk::*;
 use mesh::*;
@@ -77,16 +79,13 @@ pub async fn run_tick(runtime: Arc<rune::runtime::RuntimeContext>, unit: Arc<run
 /// Call all tickers scrits
 pub fn tick_scripts() -> rune::support::Result<()> {
     let scripts = SCRIPTS.get().unwrap();
-
     let runtime = scripts.runtime.clone();
+    let taskpool = AsyncComputeTaskPool::get();
 
     let guard = scripts.units.read().unwrap();
     for (_, unit) in guard.iter() {
-        let mut vm = rune::Vm::new(runtime.clone(), unit.clone());
-
-        if let Err(e) = vm.call(["tick"], ()) {
-            log::error!("Script execute error: {}", e);
-        }
+        // Spawn detached tasks
+        taskpool.spawn(run_tick(runtime.clone(), unit.clone())).detach();
     }
 
     Ok(())
@@ -111,6 +110,8 @@ pub fn is_initalized() -> bool {
 
 /// Init main shared components and core data
 pub fn init() {
+    AsyncComputeTaskPool::get_or_init(|| TaskPool::new());
+
     init_scripts().expect("Scripts initialization error");
 
     if CORE.set(Core {
@@ -211,7 +212,7 @@ fn add_mesh(mesh: Mesh, pos: RnIVec3) {
 pub fn module(context: &mut rune::Context) -> rune::support::Result<()> {
     let mut m = rune::Module::new();
 
-    // Constantc
+    // Constants
     m.constant("SIZE", SIZE).build()?;
     m.constant("SIZE_P3", SIZE_P3).build()?;
 
@@ -243,7 +244,7 @@ pub fn module(context: &mut rune::Context) -> rune::support::Result<()> {
     m.function_meta(add_mesh)?;
 
     m.function_meta(push_vertex)?;
-    m.function_meta(finish_mesh)?;
+    m.function_meta(push_index)?;
 
     context.install(m)?;
     Ok(())
