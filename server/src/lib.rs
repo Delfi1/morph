@@ -15,7 +15,6 @@ pub fn get_player(ctx: &ReducerContext) -> Option<Player> {
 pub struct Player {
     #[primary_key]
     identity: Identity,
-
     is_admin: bool,
 }
 

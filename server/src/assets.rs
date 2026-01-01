@@ -1,14 +1,17 @@
 use std::collections::*;
 use spacetimedb::{ReducerContext, Table};
 
-#[spacetimedb::table(name=assets)]
+#[spacetimedb::table(name=assets, public)]
 pub struct AssetFile {
     #[primary_key]
     pub path: String,
-    pub value: Vec<u8>
+    pub value: Vec<u8>,
+    
+    /// File's hash key
+    pub digest: Vec<u8>
 }
 
-#[spacetimedb::table(name=scripts)]
+#[spacetimedb::table(name=scripts, public)]
 pub struct ScriptAsset {
     #[primary_key]
     pub asset_path: String
@@ -35,9 +38,13 @@ fn update_asset(ctx: &ReducerContext, asset: AssetFile) {
 
 /// Insert new asset to DB or update it
 pub fn add_raw_asset(ctx: &ReducerContext, path: String, value: Vec<u8>) {
-    let asset = match ctx.db.assets().path().find(&path).is_none() { 
-        true => ctx.db.assets().insert(AssetFile { path, value }),
-        false => ctx.db.assets().path().update(AssetFile {path, value } )
+    let digest = shared::assets::digest(&value);
+    let asset = AssetFile { path, value, digest };
+
+    // Insert or update asset data 
+    let asset = match ctx.db.assets().path().find(&asset.path).is_none() { 
+        true => ctx.db.assets().insert(asset),
+        false => ctx.db.assets().path().update(asset)
     };
 
     update_asset(ctx, asset);
@@ -60,8 +67,9 @@ pub fn init(ctx: &ReducerContext) {
     for (path, value) in values {
         ctx.db.assets().path().delete(&path);
         ctx.db.scripts().asset_path().delete(&path);
+        let digest = shared::assets::digest(&value);
 
-        let file = ctx.db.assets().insert(AssetFile { path, value });
+        let file = ctx.db.assets().insert(AssetFile { path, value, digest });
         update_asset(ctx, file);
     }
 }

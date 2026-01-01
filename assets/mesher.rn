@@ -9,5 +9,5 @@
 
 // Main mesher realisation
 pub fn tick() {
-    debug("Calling mesher!");
+
 }

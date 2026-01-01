@@ -5,5 +5,5 @@
 // 4. Generate chunk!
 
 pub fn tick() {
-    debug("Calling generator!");
+
 }
