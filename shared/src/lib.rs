@@ -33,7 +33,7 @@ struct Scripts {
     runtime: Arc<rune::runtime::RuntimeContext>,
 
     /// Scripts units
-    units: RwLock<HashMap<u32, Arc<rune::Unit>>>,
+    units: RwLock<HashMap<String, Arc<rune::Unit>>>,
 }
 
 /// Create scripts context and install main Morph module
@@ -45,7 +45,7 @@ fn init_scripts() -> rune::support::Result<()> {
     let units = RwLock::new(HashMap::new());
 
     if SCRIPTS.set(Scripts { context, runtime, units }).is_err() {
-        log::info!("Already initialized");
+        log::error!("Already initialized");
     }
     Ok(())
 }
@@ -57,7 +57,7 @@ pub fn clear_scripts() {
 }
 
 /// Insert new script by type
-pub fn insert_script(id: u32, raw: impl AsRef<str>) -> rune::support::Result<()> {
+pub fn insert_script(path: String, raw: impl AsRef<str>) -> rune::support::Result<()> {
     let scripts = SCRIPTS.get().unwrap();
 
     let mut sources = rune::Sources::new();
@@ -70,7 +70,7 @@ pub fn insert_script(id: u32, raw: impl AsRef<str>) -> rune::support::Result<()>
     let unit = Arc::new(unit);
 
     let mut guard = scripts.units.write().unwrap();
-    guard.insert(id, unit);
+    guard.insert(path, unit);
 
     Ok(())
 }
@@ -168,7 +168,7 @@ fn add_chunk(pos: RnIVec3, chunk: Chunk) {
 
 #[rune::function]
 fn debug(value: rune::Value) {
-    log::info!("{:?}", value);
+    log::debug!("{:?}", value);
 }
 
 #[rune::function]

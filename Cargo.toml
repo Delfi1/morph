@@ -12,3 +12,5 @@ codegen-units = 1
 lto = "thin"
 
 [dependencies]
+syncer = { path = "./syncer" }
+shared = { path = "./shared" }

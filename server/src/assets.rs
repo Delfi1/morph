@@ -14,6 +14,35 @@ pub struct ScriptAsset {
     pub asset_path: String
 }
 
+/// On asset changer
+fn update_asset(ctx: &ReducerContext, asset: AssetFile) {
+    let Some(format) = asset.path.split('.').last() else { return };
+
+    match format {
+        "rn" => {
+            let data = String::from_utf8(asset.value).unwrap();
+            ctx.db.scripts().insert(ScriptAsset { asset_path: asset.path.clone() });
+
+            if let Err(e) = shared::insert_script(asset.path, data) {
+                log::error!("Script insertion error: {}", e);
+            }
+        },
+
+        // TODO: other formats
+        _ => ()
+    }
+}
+
+/// Insert new asset to DB or update it
+pub fn add_raw_asset(ctx: &ReducerContext, path: String, value: Vec<u8>) {
+    let asset = match ctx.db.assets().path().find(&path).is_none() { 
+        true => ctx.db.assets().insert(AssetFile { path, value }),
+        false => ctx.db.assets().path().update(AssetFile {path, value } )
+    };
+
+    update_asset(ctx, asset);
+}
+
 pub fn init(ctx: &ReducerContext) {
     let old_keys = ctx.db.assets().iter()
         .map(|s| s.path).collect::<HashSet<String>>();
@@ -32,26 +61,7 @@ pub fn init(ctx: &ReducerContext) {
         ctx.db.assets().path().delete(&path);
         ctx.db.scripts().asset_path().delete(&path);
 
-        let asset_path = ctx.db.assets()
-            .insert(AssetFile { path, value }).path;
-
-        // Is scripts?
-        if asset_path.ends_with(".rn") {
-            ctx.db.scripts().insert(ScriptAsset { asset_path });
-        }
-    }
-}
-
-pub fn load_scripts(ctx: &ReducerContext) {
-    shared::clear_scripts();
-    let scripts: Vec<ScriptAsset> = ctx.db.scripts().iter().collect();
-
-    for i in 0..scripts.len() {
-        let assets = ctx.db.assets().path().find(&scripts[i].asset_path).unwrap();
-        let data = String::from_utf8(assets.value).unwrap();
-
-        if let Err(e) = shared::insert_script(i as u32, data) {
-            log::error!("Script insertion error: {}", e);
-        }
+        let file = ctx.db.assets().insert(AssetFile { path, value });
+        update_asset(ctx, file);
     }
 }
