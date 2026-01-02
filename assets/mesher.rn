@@ -1,4 +1,3 @@
-
 // Mesher ticker!
 // 1. Is idle?
 // 2. Request position in queue 
@@ -7,6 +6,9 @@
 // 5. Create mesh buffer 
 // 6. Build mesh!
 
+/// Max tasks at one time
+const MAX_TASKS = 32;
+
 /// Generate mesh indicies
 fn generate_indicies() {
     let result = [];
@@ -14,8 +16,12 @@ fn generate_indicies() {
     result
 }
 
-// Main mesher realisation
-pub fn tick() {
+// Main realisation
+pub fn mesher() {
     let pos = request_mesh()?;
 
+}
+
+pub fn init() {
+    meta("mesher", MAX_TASKS)
 }

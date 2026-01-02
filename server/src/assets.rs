@@ -55,7 +55,7 @@ fn remove_asset(ctx: &ReducerContext, path: String) {
 /// Insert new asset to DB or update it
 pub fn add_raw_asset(ctx: &ReducerContext, path: String, value: Vec<u8>) {
     let digest = shared::assets::digest(&value);
-    log::info!("Update asset: {} | {:?}", path, digest);
+    log::info!("Updated asset: {}", path);
 
     let asset = AssetFile { path, value, digest };
 

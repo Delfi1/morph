@@ -4,7 +4,15 @@
 // 3. Create chunk buffer 
 // 4. Generate chunk!
 
-pub fn tick() {
+/// Max tasks at one time
+const MAX_TASKS = 64;
+
+// Main realisation
+pub fn generator() {
     let pos = request_gen()?;
 
+}
+
+pub fn init() {
+    meta("generator", MAX_TASKS)
 }
