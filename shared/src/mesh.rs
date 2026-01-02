@@ -12,7 +12,9 @@ pub enum Direction {
 
 #[derive(rune::Any, Debug, Clone)]
 pub struct Mesh {
+    #[rune(set)]
     vertices: Vec<u32>,
+    #[rune(set)]
     indices: Vec<u32>,
 }
 
@@ -20,17 +22,8 @@ pub struct Mesh {
 #[rune::function]
 pub fn new_mesh() -> Mesh {
     Mesh {
-        vertices: Vec::with_capacity(256),
+        vertices: Vec::new(),
         indices: Vec::new()
     }
 }
 
-#[rune::function(instance)]
-pub fn push_vertex(mesh: &mut Mesh, vertex: u32) {
-    mesh.vertices.push(vertex);
-}
-
-#[rune::function(instance)]
-pub fn push_index(mesh: &mut Mesh, index: u32) {
-    mesh.indices.push(index);
-}

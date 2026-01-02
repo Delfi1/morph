@@ -5,5 +5,6 @@
 // 4. Generate chunk!
 
 pub fn tick() {
+    let pos = request_gen()?;
 
 }

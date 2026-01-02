@@ -36,9 +36,27 @@ fn update_asset(ctx: &ReducerContext, asset: AssetFile) {
     }
 }
 
+/// On asset changer
+fn remove_asset(ctx: &ReducerContext, path: String) {
+    let Some(format) = path.split('.').last() else { return };
+
+    match format {
+        "rn" => {
+            ctx.db.scripts().asset_path().delete(&path);
+
+            shared::remove_script(path);
+        },
+
+        // TODO: other formats
+        _ => ()
+    }
+}
+
 /// Insert new asset to DB or update it
 pub fn add_raw_asset(ctx: &ReducerContext, path: String, value: Vec<u8>) {
     let digest = shared::assets::digest(&value);
+    log::info!("Update asset: {} | {:?}", path, digest);
+
     let asset = AssetFile { path, value, digest };
 
     // Insert or update asset data 
@@ -48,6 +66,13 @@ pub fn add_raw_asset(ctx: &ReducerContext, path: String, value: Vec<u8>) {
     };
 
     update_asset(ctx, asset);
+}
+
+/// Remove asset from DB
+pub fn remove_raw_asset(ctx: &ReducerContext, path: String) {
+    ctx.db.assets().path().delete(&path);
+
+    remove_asset(ctx, path);
 }
 
 pub fn init(ctx: &ReducerContext) {

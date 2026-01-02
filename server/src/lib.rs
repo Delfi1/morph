@@ -74,15 +74,31 @@ fn tick(ctx: &ReducerContext, _arg: Ticker) {
 #[spacetimedb::reducer]
 /// Change asset or create new one
 fn edit_asset(ctx: &ReducerContext, path: String, value: Vec<u8>) {
-    // If host (always admin access):
-    if ctx.connection_id.is_none() {
-        assets::add_raw_asset(ctx, path, value);
-        return;
-    }
+    // If player is exists and have admin rights
+    let _is_admin = get_player(ctx)
+        .and_then(|p| Some(p.is_admin))
+        .unwrap_or(false);
 
-    let Some(player) = get_player(ctx) else { return };
+    //Todo: If local-host (always admin access):
+    //if is_admin {}
 
-    if player.is_admin {
-        // todo
-    }
+    // FIXME: private assets access 
+    assets::add_raw_asset(ctx, path, value);
+    return;
+}
+
+#[spacetimedb::reducer]
+/// Change asset or create new one
+fn remove_asset(ctx: &ReducerContext, path: String) {
+    // If player is exists and have admin rights
+    let _is_admin = get_player(ctx)
+        .and_then(|p| Some(p.is_admin))
+        .unwrap_or(false);
+
+    //Todo: If local-host (always admin access):
+    //if is_admin {}
+
+    // FIXME: private assets access 
+    assets::remove_raw_asset(ctx, path);
+    return;
 }

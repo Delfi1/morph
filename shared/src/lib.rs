@@ -75,6 +75,14 @@ pub fn insert_script(path: String, raw: impl AsRef<str>) -> rune::support::Resul
     Ok(())
 }
 
+/// Insert new script by type
+pub fn remove_script(path: String) {
+    let scripts = SCRIPTS.get().unwrap();
+
+    let mut guard = scripts.units.write().unwrap();
+    guard.remove(&path);
+}
+
 pub async fn run_tick(runtime: Arc<rune::runtime::RuntimeContext>, unit: Arc<rune::Unit>) {
     let mut vm = rune::Vm::new(runtime.clone(), unit.clone());
 
@@ -172,7 +180,7 @@ fn debug(value: rune::Value) {
 }
 
 #[rune::function]
-/// Request from queue generate chunk position
+/// Request chunk position from generator queue
 fn request_gen() -> Option<RnIVec3> {
     let core = CORE.get().unwrap();
     let mut queue = core.gen_queue.lock().unwrap();
@@ -190,7 +198,7 @@ fn request_gen() -> Option<RnIVec3> {
 }
 
 #[rune::function]
-/// Request from queue mesher chunk position
+/// Request chunk position from mesher queue
 fn request_mesh() -> Option<RnIVec3> {
     let core = CORE.get().unwrap();
     let mut queue = core.meshes_queue.lock().unwrap();
@@ -208,6 +216,8 @@ fn request_mesh() -> Option<RnIVec3> {
 }
 
 #[rune::function]
+/// Add mesh to a core
+/// TODO: add position value to intermediate buffer 
 fn add_mesh(mesh: Mesh, pos: RnIVec3) {
     let core = CORE.get().unwrap();
     let mut meshes = core.meshes.lock().unwrap();
@@ -249,9 +259,6 @@ pub fn module(context: &mut rune::Context) -> rune::support::Result<()> {
     // Meshes
     m.function_meta(new_mesh)?;
     m.function_meta(add_mesh)?;
-
-    m.function_meta(push_vertex)?;
-    m.function_meta(push_index)?;
 
     context.install(m)?;
     Ok(())
