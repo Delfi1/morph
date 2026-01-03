@@ -1,0 +1,13 @@
+// Blocks init metadata
+
+pub fn init() {
+    // Need because of hot-reloading
+    clear_blocks();
+    add_block("Air", None);
+
+    let m = new_model(ModelType::Full, "textures/dirt.png");
+    add_block("Dirt", Some(m));
+
+    let m = new_model(ModelType::Full, "textures/grass.png");
+    add_block("Grass", Some(m));
+}

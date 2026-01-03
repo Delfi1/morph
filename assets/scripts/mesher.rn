@@ -9,6 +9,14 @@
 /// Max tasks at one time
 const MAX_TASKS = 32;
 
+fn is_meshable(id) {
+    let b = block_type(id)?;
+    let m = model_type(b);
+
+    debug("Meshable:");
+    debug(m.is_some());
+}
+
 /// Generate mesh indicies
 fn generate_indicies() {
     let result = [];
@@ -20,6 +28,7 @@ fn generate_indicies() {
 pub fn mesher() {
     let pos = request_mesh()?;
 
+    debug("Test");
 }
 
 pub fn init() {

@@ -3,9 +3,10 @@
 //! Morph: voxel engine with server-side mesher
 //! Mesher on Rune
 
-use std::{collections::*, sync::*};
+use std::{collections::*, io::Write, sync::*};
 
 // Re-exports
+pub use fastnoise_lite as noise;
 pub use bevy_math as math;
 pub use bevy_tasks as tasks;
 pub use rune;
@@ -26,7 +27,7 @@ use mesh::*;
 pub struct ScriptMeta {
     // Entry point (function)
     #[rune(set)]
-    entry: String,
+    entry: Option<String>,
 
     #[rune(set)]
     /// Count of one-time operations, one by default
@@ -35,14 +36,14 @@ pub struct ScriptMeta {
 
 impl Default for ScriptMeta {
     fn default() -> Self {
-        Self { threading: 1, entry: "tick".into() }
+        Self { threading: 1, entry: None }
     }
 }
 
 #[rune::function]
 /// Create new script metadata
 pub fn meta(entry: String, threading: u32) -> ScriptMeta {
-    ScriptMeta { entry, threading }
+    ScriptMeta { entry: Some(entry), threading }
 }
 
 // TODO: Script return data 
@@ -52,6 +53,7 @@ pub fn meta(entry: String, threading: u32) -> ScriptMeta {
 /// Script compiled and meta data
 struct Script {
     unit: Arc<rune::Unit>,
+    sources: Arc<rune::Sources>,
     meta: ScriptMeta
 }
 
@@ -96,14 +98,39 @@ pub fn clear_scripts() {
 pub fn insert_script(path: String, raw: impl AsRef<str>) -> rune::support::Result<()> {
     let scripts = SCRIPTS.get().unwrap();
 
+    // Remove script if exists
+    let mut guard = scripts.values.write().unwrap();
+    guard.remove(&path);
+    drop(guard);
+
     let mut sources = rune::Sources::new();
     sources.insert(rune::Source::memory(raw)?)?;
 
-    let unit = rune::prepare(&mut sources)
-        .with_context(&scripts.context)
-        .build()?;
+    // Script build output result
+    let mut buffer = rune::termcolor::BufferWriter::stderr(Default::default()).buffer();
+    let mut data = String::new();
+    let mut diag = rune::Diagnostics::new();
 
-    let unit = Arc::new(unit);
+    let result = rune::prepare(&mut sources)
+        .with_diagnostics(&mut diag)
+        .with_context(&scripts.context)
+        .build();
+
+    let unit = match result {
+        Ok(unit) => Arc::new(unit),
+        Err(_) => {
+            diag.emit(&mut buffer, &sources).unwrap();
+
+            // Safety: output stream is always UTF-8
+            unsafe { buffer.write_all(data.as_bytes_mut()).unwrap(); }
+            log::error!("Script build error diagnostics: {}", data);
+
+            // Compile error was processed
+            return Ok(());
+        }        
+    };
+
+    let sources = Arc::new(sources);
     let mut vm = rune::Vm::new(scripts.runtime.clone(), unit.clone());
 
     // Init scripts and get metadata
@@ -111,12 +138,15 @@ pub fn insert_script(path: String, raw: impl AsRef<str>) -> rune::support::Resul
         .and_then(|v| Ok(rune::from_value::<ScriptMeta>(v)?))
         .unwrap_or(ScriptMeta::default());
 
+    // Don't add script if it don't have entry point
+    if meta.entry.is_none() { return Ok(()); }
+
     // Create tasks variable
     let mut tasks = scripts.tasks.lock().unwrap();
     tasks.insert(path.clone(), Vec::new());
 
     let mut guard = scripts.values.write().unwrap();
-    guard.insert(path, Script { unit, meta });
+    guard.insert(path, Script { unit, meta, sources });
 
     Ok(())
 }
@@ -134,11 +164,24 @@ pub fn remove_script(path: String) {
     }
 }
 
-pub async fn run_script(runtime: Arc<rune::runtime::RuntimeContext>, entry: String, unit: Arc<rune::Unit>) {
+pub async fn run_script(
+    runtime: Arc<rune::runtime::RuntimeContext>, 
+    entry: String,
+    unit: Arc<rune::Unit>, 
+    sources: Arc<rune::Sources>
+) {
     let mut vm = rune::Vm::new(runtime.clone(), unit.clone());
+    
+    let mut stream = rune::termcolor::BufferedStandardStream::stdout(Default::default());
+    let mut buffer = String::new();
 
-    if let Err(e) = vm.call([entry.as_str()], ()) {
-        log::error!("Script execute error: {}", e);
+    let mut diag = rune::Diagnostics::new();
+    if let Err(_) = vm.call_with_diagnostics([entry.as_str()], (), Some(&mut diag)) {
+        diag.emit(&mut stream, &sources).unwrap();
+        // Safety: output stream is always UTF-8
+        unsafe { stream.write_all(buffer.as_bytes_mut()).unwrap(); }
+
+        log::error!("Script execute error diagnostics: {}", buffer);
     }
 }
 
@@ -170,11 +213,12 @@ pub fn tick_scripts() -> rune::support::Result<()> {
             continue; 
         }
 
-        let entry = script.meta.entry.clone();
+        let entry = script.meta.entry.clone().unwrap();
         let unit = script.unit.clone();
+        let sources = script.sources.clone();
 
         // Spawn task and insert
-        new.push(taskpool.spawn(run_script(runtime.clone(), entry, unit.clone())));
+        new.push(taskpool.spawn(run_script(runtime.clone(), entry, unit, sources)));
 
         tasks_guard.insert(path.clone(), new);
     }
@@ -184,13 +228,14 @@ pub fn tick_scripts() -> rune::support::Result<()> {
 
 static CORE: OnceLock<Core> = OnceLock::new();
 
-#[derive(Debug)]
 pub struct Core {
     chunks: Mutex<HashMap<IVec3, Chunk>>,
     meshes: Mutex<HashMap<IVec3, Mesh>>,
 
     gen_queue: Mutex<VecDeque<IVec3>>,
     meshes_queue: Mutex<VecDeque<IVec3>>,
+
+    //noise: Mutex<noise::FastNoiseLite>
 }
 
 pub fn is_initalized() -> bool {
@@ -201,6 +246,7 @@ pub fn is_initalized() -> bool {
 pub fn init() {
     AsyncComputeTaskPool::get_or_init(|| TaskPool::new());
 
+    init_blocks();
     init_scripts().expect("Scripts initialization error");
 
     if CORE.set(Core {
@@ -209,6 +255,8 @@ pub fn init() {
 
         gen_queue: Mutex::new(VecDeque::new()),
         meshes_queue: Mutex::new(VecDeque::new()),
+        
+        //noise: Mutex::new(noise::FastNoiseLite::new())
     }).is_err() {
         log::error!("Already initialized");
     }
@@ -234,6 +282,13 @@ pub fn _get_chunk(pos: IVec3) -> Option<Chunk> {
 }
 
 #[rune::function]
+fn debug(value: rune::Value) {
+    log::debug!("{:?}", value);
+}
+
+// todo: Noise for worldgen
+
+#[rune::function]
 fn get_chunk(pos: RnIVec3) -> Option<Chunk> {
     _get_chunk(pos.0)
 }
@@ -244,11 +299,6 @@ fn add_chunk(pos: RnIVec3, chunk: Chunk) {
     let mut guard = core.chunks.lock().unwrap();
 
     guard.insert(pos.0, chunk);
-}
-
-#[rune::function]
-fn debug(value: rune::Value) {
-    log::debug!("{:?}", value);
 }
 
 #[rune::function]
@@ -288,6 +338,9 @@ pub fn module(context: &mut rune::Context) -> rune::support::Result<()> {
     m.constant("SIZE_P3", SIZE_P3).build()?;
 
     // Main types
+    m.ty::<ModelType>()?;
+    m.ty::<Model>()?;
+    m.ty::<BlockType>()?;
     m.ty::<Chunk>()?;
     m.ty::<ChunksRefs>()?;
     m.ty::<Direction>()?;
@@ -308,6 +361,13 @@ pub fn module(context: &mut rune::Context) -> rune::support::Result<()> {
 
     m.function_meta(get_refs)?;
     m.function_meta(refs_block)?;
+
+    // Blocks functions
+    m.function_meta(new_model)?;
+    m.function_meta(clear_blocks)?;
+    m.function_meta(add_block)?;
+    m.function_meta(block_type)?;
+    m.function_meta(model_type)?;
 
     // Meshes
     m.function_meta(new_mesh)?;

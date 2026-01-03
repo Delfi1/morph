@@ -1,15 +1,5 @@
 use super::math::*;
 
-#[derive(rune::Any, Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Direction {
-    Left,
-    Right,
-    Down,
-    Up,
-    Back,
-    Forward,
-}
-
 #[derive(rune::Any, Debug, Clone)]
 pub struct Mesh {
     #[rune(set)]
