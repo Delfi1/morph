@@ -44,7 +44,7 @@ fn remove_asset(ctx: &ReducerContext, path: String) {
         "rn" => {
             ctx.db.scripts().asset_path().delete(&path);
 
-            shared::remove_script(path);
+            shared::remove_script(&path);
         },
 
         // TODO: other formats

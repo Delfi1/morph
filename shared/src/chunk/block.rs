@@ -101,6 +101,15 @@ pub fn block_type(id: u32) -> Option<BlockType> {
 }
 
 #[rune::function]
+/// Return block index by name OR default index (0)
+pub fn block_id(name: String) -> u32 {
+    let handler = VALUE.get().unwrap();
+    let guard = handler.names.read().unwrap();
+
+    guard.get(&name).cloned().unwrap_or(0)
+}
+
+#[rune::function]
 pub fn model_type(block: &BlockType) -> Option<ModelType> {
     block.model.as_ref().and_then(|m| Some(m.model))
 }

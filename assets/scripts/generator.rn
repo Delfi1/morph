@@ -1,7 +1,7 @@
-// Gen ticker!
-// 1. Is idle?
-// 2. Request position in queue 
-// 3. Create chunk buffer 
+// World Generaion script!
+// 1. Request position in queue 
+// 2. Create chunk buffer 
+// 3. Get noise data
 // 4. Generate chunk!
 
 /// Max tasks at one time
@@ -10,9 +10,34 @@ const MAX_TASKS = 64;
 // Main realisation
 pub fn generator() {
     let pos = request_gen()?;
+    let chunk = new_chunk();
+    
 
 }
 
+fn pre_gen() {
+    // dirt block index
+    let dirt = block_id("Dirt");
+
+    for x in -5..=5 {
+        for y in -2..=2 {
+            for z in -5..=5 {
+                let chunk = new_chunk();
+
+                for i in 0..SIZE.pow(2) {
+                    chunk.set_block(i, dirt);
+                }
+
+                debug("Created new chunk!");
+                add_chunk(chunk, ivec3(x, y, z));
+            }
+        }
+    }
+
+    debug("Test");
+}
+
 pub fn init() {
+    pre_gen();
     meta("generator", MAX_TASKS)
 }

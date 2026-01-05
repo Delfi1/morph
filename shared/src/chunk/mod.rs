@@ -18,7 +18,7 @@ pub const HALF_BYTE: usize = BYTE / 2;
 // How much bytes
 pub const BUF_SIZE: usize = SIZE_P3 * BLOCK_SIZE / BYTE;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, rune::Any)]
 #[repr(transparent)]
 pub struct RawChunk(Vec<u8>);
 
@@ -156,20 +156,20 @@ pub fn new_chunk() -> Chunk {
     Chunk::empty()
 }
 
-#[rune::function]
-pub fn get_block(chunk: &RnIVec3, block: &RnIVec3) -> u16 {
-    let chunk = super::_get_chunk(chunk.0).unwrap();
-    let data = chunk.read();
+#[rune::function(instance)]
+pub fn get_block(chunk: &Chunk, index: usize) -> u16 {
+    chunk.read().get_block(index)
+}
 
-    data.get_block(RawChunk::block_index(block.0))
+#[rune::function(instance)]
+pub fn set_block(chunk: &Chunk, index: usize, value: u16) {
+    chunk.write().set_block(index, value)
 }
 
 #[rune::function]
-pub fn set_block(chunk: &RnIVec3, block: &RnIVec3, value: u16) {
-    let chunk = super::_get_chunk(chunk.0).unwrap();
-    let mut data = chunk.write();
-
-    data.set_block(RawChunk::block_index(block.0), value)
+/// Convert block position into index
+pub fn position_index(position: RnIVec3) -> usize {
+    RawChunk::block_index(position.0)
 }
 
 #[rune::function]

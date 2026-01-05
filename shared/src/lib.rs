@@ -92,6 +92,9 @@ pub fn clear_scripts() {
     let scripts = SCRIPTS.get().unwrap();
     let mut guard = scripts.values.write().unwrap();
     guard.clear();
+
+    let mut guard = scripts.tasks.lock().unwrap();
+    guard.clear();
 }
 
 /// Insert new script by type
@@ -99,31 +102,19 @@ pub fn insert_script(path: String, raw: impl AsRef<str>) -> rune::support::Resul
     let scripts = SCRIPTS.get().unwrap();
 
     // Remove script if exists
-    let mut guard = scripts.values.write().unwrap();
-    guard.remove(&path);
-    drop(guard);
+    remove_script(&path);
 
     let mut sources = rune::Sources::new();
     sources.insert(rune::Source::memory(raw)?)?;
 
-    // Script build output result
-    let mut buffer = rune::termcolor::BufferWriter::stderr(Default::default()).buffer();
-    let mut data = String::new();
-    let mut diag = rune::Diagnostics::new();
-
     let result = rune::prepare(&mut sources)
-        .with_diagnostics(&mut diag)
         .with_context(&scripts.context)
         .build();
 
     let unit = match result {
         Ok(unit) => Arc::new(unit),
-        Err(_) => {
-            diag.emit(&mut buffer, &sources).unwrap();
-
-            // Safety: output stream is always UTF-8
-            unsafe { buffer.write_all(data.as_bytes_mut()).unwrap(); }
-            log::error!("Script build error diagnostics: {}", data);
+        Err(e) => {
+            log::error!("Script build error: {}", e);
 
             // Compile error was processed
             return Ok(());
@@ -134,10 +125,17 @@ pub fn insert_script(path: String, raw: impl AsRef<str>) -> rune::support::Resul
     let mut vm = rune::Vm::new(scripts.runtime.clone(), unit.clone());
 
     // Init scripts and get metadata
-    let meta = vm.call(["init"], ())
-        .and_then(|v| Ok(rune::from_value::<ScriptMeta>(v)?))
-        .unwrap_or(ScriptMeta::default());
+    let result = vm.call(["init"], ())
+        .and_then(|v| Ok(rune::from_value::<ScriptMeta>(v)?));
 
+    let meta = match result {
+        Ok(meta) => meta,
+        Err(e) => { 
+            log::warn!("Script init error: {}", e);
+            ScriptMeta::default()
+        }
+    };
+        
     // Don't add script if it don't have entry point
     if meta.entry.is_none() { return Ok(()); }
 
@@ -152,15 +150,15 @@ pub fn insert_script(path: String, raw: impl AsRef<str>) -> rune::support::Resul
 }
 
 /// Insert new script by type
-pub fn remove_script(path: String) {
+pub fn remove_script(path: &String) {
     let scripts = SCRIPTS.get().unwrap();
 
     let mut guard = scripts.values.write().unwrap();
 
     // Remove tasks if exists
-    if let Some(_) = guard.remove(&path) {
+    if let Some(_) = guard.remove(path) {
         let mut tasks = scripts.tasks.lock().unwrap();
-        tasks.remove(&path);
+        tasks.remove(path);
     }
 }
 
@@ -281,9 +279,43 @@ pub fn _get_chunk(pos: IVec3) -> Option<Chunk> {
     guard.get(&pos).cloned()
 }
 
+#[rune::macro_]
+fn f(
+    cx: &mut rune::macros::MacroContext<'_, '_, '_>, 
+    stream: &rune::macros::TokenStream
+) -> rune::compile::Result<rune::macros::TokenStream>  {
+    let mut parser = rune::parse::Parser::from_token_stream(stream, cx.input_span());
+    let mut output = rune::macros::quote!("");
+
+    while !parser.is_eof()? {
+        let ident = parser.parse_all::<rune::ast::Ident>()?;
+        let ident = rune::alloc::borrow::TryToOwned::try_to_owned(cx.resolve(ident)?)?;
+        let value = cx.lit(ident)?;
+
+        output = rune::macros::quote!(#output + #value);
+    }
+
+    parser.eof()?;
+    Ok(rune::macros::quote!(#output).into_token_stream(cx)?)
+}
+
+/*
+#[rune::macro_]
+fn ident_to_string(cx: &mut MacroContext<'_, '_, '_>, stream: &TokenStream) -> compile::Result<TokenStream> {
+    let mut p = Parser::from_token_stream(stream, cx.input_span());
+    let ident = p.parse_all::<ast::Ident>()?;
+    let ident = cx.resolve(ident)?.try_to_owned()?;
+    let string = cx.lit(&ident)?;
+    Ok(quote!(#string).into_token_stream(cx)?)
+}
+*/
+
 #[rune::function]
 fn debug(value: rune::Value) {
-    log::debug!("{:?}", value);
+    match value.borrow_string_ref() {
+        Ok(output) => log::debug!("{}", output.to_string()),
+        Err(_) => log::debug!("{:?}", value)
+    }
 }
 
 // todo: Noise for worldgen
@@ -294,7 +326,7 @@ fn get_chunk(pos: RnIVec3) -> Option<Chunk> {
 }
 
 #[rune::function]
-fn add_chunk(pos: RnIVec3, chunk: Chunk) {
+fn add_chunk(chunk: Chunk, pos: RnIVec3) {
     let core = CORE.get().unwrap();
     let mut guard = core.chunks.lock().unwrap();
 
@@ -317,6 +349,15 @@ fn request_mesh() -> Option<RnIVec3> {
     let mut queue = core.meshes_queue.lock().unwrap();
     
     queue.pop_back().and_then(|p| Some(RnIVec3(p)))
+}
+
+#[rune::function]
+/// Return mesh position back to the list
+fn return_mesh(pos: RnIVec3) {
+    let core = CORE.get().unwrap();
+    let mut queue = core.meshes_queue.lock().unwrap();
+    
+    queue.push_back(pos.0)
 }
 
 #[rune::function]
@@ -347,6 +388,8 @@ pub fn module(context: &mut rune::Context) -> rune::support::Result<()> {
     m.ty::<Mesh>()?;
 
     // Helpful functions
+    m.macro_meta(f)?;
+
     m.function_meta(chunk::ivec3)?;
     m.function_meta(debug)?;
     m.function_meta(meta)?;
@@ -367,15 +410,18 @@ pub fn module(context: &mut rune::Context) -> rune::support::Result<()> {
     m.function_meta(clear_blocks)?;
     m.function_meta(add_block)?;
     m.function_meta(block_type)?;
+    m.function_meta(block_id)?;
     m.function_meta(model_type)?;
+    m.function_meta(position_index)?;
 
     // Meshes
     m.function_meta(new_mesh)?;
     m.function_meta(add_mesh)?;
 
-    // Core requests
+    // Requests to a Core
     m.function_meta(request_gen)?;
     m.function_meta(request_mesh)?;
+    m.function_meta(return_mesh)?;
 
     context.install(m)?;
     Ok(())

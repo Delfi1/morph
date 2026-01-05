@@ -1,4 +1,4 @@
-// Blocks init metadata
+// Blocks on-init metadata
 
 pub fn init() {
     // Need because of hot-reloading
@@ -9,5 +9,5 @@ pub fn init() {
     add_block("Dirt", Some(m));
 
     let m = new_model(ModelType::Full, "textures/grass.png");
-    add_block("Grass", Some(m));
+    add_block("Grass", Some(m));    
 }

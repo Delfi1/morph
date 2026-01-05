@@ -11,6 +11,27 @@ members = ["server", "shared", "syncer"]
 codegen-units = 1
 lto = "thin"
 
+[dependencies.bevy]
+version = "0.17.3"
+default-features = false
+features = [
+    "bevy_core_pipeline",
+    "multi_threaded",
+    "async_executor",
+    "default_font",
+    "file_watcher",
+    "bevy_render",
+    "bevy_window",
+    "bevy_image",
+    "bevy_state",
+    "bevy_color",
+    "bevy_asset",
+    "bevy_text",
+    "serialize",
+    "bevy_log",
+    "std",
+]
+
 [dependencies]
 syncer = { path = "./syncer" }
 shared = { path = "./shared" }

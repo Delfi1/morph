@@ -1,10 +1,9 @@
-// Mesher ticker!
-// 1. Is idle?
-// 2. Request position in queue 
-// 3. Request chunks refs
-// 4. Are refs chunks generated? if not - return pos to queue
-// 5. Create mesh buffer 
-// 6. Build mesh!
+// Mesher script!
+// 1. Request position in queue 
+// 2. Request chunks refs
+// 3. Are refs chunks generated? if not - return pos to queue
+// 4. Create mesh buffer 
+// 5. Build mesh!
 
 /// Max tasks at one time
 const MAX_TASKS = 32;
@@ -13,8 +12,6 @@ fn is_meshable(id) {
     let b = block_type(id)?;
     let m = model_type(b);
 
-    debug("Meshable:");
-    debug(m.is_some());
 }
 
 /// Generate mesh indicies
@@ -27,8 +24,8 @@ fn generate_indicies() {
 // Main realisation
 pub fn mesher() {
     let pos = request_mesh()?;
+    let refs = get_refs(pos);
 
-    debug("Test");
 }
 
 pub fn init() {
